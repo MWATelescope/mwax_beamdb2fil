@@ -5,13 +5,11 @@
 //
 // CFilFile
 //
-int CFilFile_Open(cFilFile *filfile_ptr, const char* szFileName )
+int CFilFile_Open(cFilFile *filfile_ptr, char* filename)
 {
-    if( !filfile_ptr->m_File ){
-        if( szFileName && strcmp(szFileName, filfile_ptr->m_szFileName) )
-        {
-            strncpy(filfile_ptr->m_szFileName, szFileName, PATH_MAX);
-        }
+    if( !filfile_ptr->m_File )
+    {                
+        filfile_ptr->m_szFileName = filename;
         
         filfile_ptr->m_File = fopen(filfile_ptr->m_szFileName, "wb" );
     }
@@ -38,22 +36,9 @@ void CFilFile_CheckFile(cFilFile *filfile_ptr)
     }
 }
 
-// parser :
-// return number of correctly recognised DADA keywords which can be translated to FIL keywords :
-int CFilFile_ParseDadaHeader(cFilFile *filfile_ptr, const char* header_buffer, int header_size, cFilFileHeader* filHeader )
-{
-    // TO BE IMPLEMENTED !
-    if (filfile_ptr == NULL || header_buffer == NULL || header_size == 0 || filHeader ==NULL)
-        return -1;
-    else
-        return 0;
-}
-
 // HEADER :
 int CFilFile_WriteHeader(cFilFile *filfile_ptr, const cFilFileHeader* filHeader )
-{
-    CFilFile_Open(filfile_ptr, NULL);
-   
+{      
     CFilFile_WriteKeyword_string(filfile_ptr, "HEADER_START", NULL);
 
     // awk '{print "   WriteKeyword( \""$2"\" , filHeader."$2" );";}' keys.tmp > keys.txt
@@ -146,9 +131,9 @@ int CFilFile_WriteKeyword_string(cFilFile *filfile_ptr, const char* keyname, con
 }
 
 // DATA :
-int CFilFile_WriteData(cFilFile *filfile_ptr, float* data_float, int n_channels )
+int CFilFile_WriteData(cFilFile *filfile_ptr, float* data_float, int n_floats )
 {
-    int ret = fwrite( data_float, sizeof(float), n_channels, filfile_ptr->m_File );
+    int ret = fwrite( data_float, sizeof(float), n_floats, filfile_ptr->m_File );
 
     return ret;
 }

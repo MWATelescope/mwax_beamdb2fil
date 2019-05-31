@@ -52,6 +52,8 @@ typedef struct dada_db_s {
     int nfine_chan;
     int ntimes;
     int nbeams;
+    int int_time_msec;
+    int exposure_sec;
     uint64_t transfer_size;
 
     // Not from header- calculated values

@@ -44,13 +44,9 @@ typedef struct CFilFile
    FILE*       m_File;
 } cFilFile;
 
-int CFilFile_Open(cFilFile *filfile_ptr, const char* szFileName);   
+int CFilFile_Open(cFilFile *filfile_ptr, char* filename);   
 int CFilFile_Close(cFilFile *filfile_ptr);
 void CFilFile_CheckFile(cFilFile *filfile_ptr);
-
-// parser :
-// return number of correctly recognised DADA keywords which can be translated to FIL keywords :
-int CFilFile_ParseDadaHeader(cFilFile *filfile_ptr, const char* header_buffer, int header_size, cFilFileHeader* filHeader );
 
 // HEADER :
 int CFilFile_WriteHeader(cFilFile *filfile_ptr, const cFilFileHeader* filHeader );

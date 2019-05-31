@@ -140,7 +140,7 @@ int dada_dbfil_open(dada_client_t* client)
       ctx->curr_block = 0;
       ctx->block_number= 0;
 
-      // fits info  
+      // fil info  
       strncpy(ctx->fil_filename, "", PATH_MAX);      
 
       // Set the obsid & sub obsid 
@@ -168,8 +168,11 @@ int dada_dbfil_open(dada_client_t* client)
       //
       // Check transfer size read in from header matches what we expect from the other params      
       //     
-      // one sub obs + (weights * number of integrations per sub obs)
-      ctx->expected_transfer_size = -1;
+      // one sub obs = beams * pols * timesteps per chan * chans * size of a sample
+      //
+      ctx->ntimes = ctx->int_time_msec;  // FIX ME dummp value for now 1000 = 1000 samples per sec
+
+      ctx->expected_transfer_size = ctx->nbeams * ctx->npol * ctx->ntimes * ctx->nfine_chan * sizeof(float);
 
       // The number of bytes should never exceed transfer size
       if (ctx->expected_transfer_size > ctx->transfer_size)
@@ -179,12 +182,11 @@ int dada_dbfil_open(dada_client_t* client)
       }
 
       // Also confirm that the integration size can fit into the ringbuffer size
-      /*
-      if (ctx->expected_transfer_size_of_integration_plus_weights > ctx->block_size)
+      if (ctx->expected_transfer_size > ctx->block_size)
       {
-        multilog(log, LOG_ERR, "dada_dbfil_open(): Ring buffer block size (%lu bytes) is less than the calculated size of an integration from header parameters (%lu bytes).\n", ctx->block_size, ctx->expected_transfer_size_of_integration_plus_weights);
+        multilog(log, LOG_ERR, "dada_dbfil_open(): Ring buffer block size (%lu bytes) is less than the calculated size of an integration from header parameters (%lu bytes).\n", ctx->block_size, ctx->expected_transfer_size);
         return -1;
-      }*/
+      }
       
       // Reset the filenumber
       ctx->fil_file_number = 0;      
@@ -204,7 +206,7 @@ int dada_dbfil_open(dada_client_t* client)
     /* Make a new filename- oooooooooo_YYYYMMDDhhmmss_chCCC_FFF.fil */
     snprintf(ctx->fil_filename, PATH_MAX, "%s/%ld_%04d%02d%02d%02d%02d%02d_ch%02d_%03d.fil", ctx->destination_dir, ctx->obs_id, year, month, day, hour, minute, second, ctx->coarse_channel, ctx->fil_file_number);
     
-    if (create_fil(client, &(ctx->out_filfile_ptr), ctx->fil_filename)) 
+    if (create_fil(client, &(ctx->out_filfile_ptr))) 
     {
       multilog(log, LOG_ERR,"dada_dbfil_open(): Error creating new fil file.\n");
       return -1;
@@ -240,8 +242,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
   {
     multilog_t * log = (multilog_t *) ctx->log;
     
-    uint64_t written  = 0;
-    uint64_t to_write = bytes;
+    uint64_t written  = 0;    
     uint64_t wrote    = 0;
 
     multilog (log, LOG_DEBUG, "dada_dbfil_io(): Processing block %d.\n", ctx->block_number);
@@ -250,36 +251,78 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
         
     // Read ring buffer block and write data out    
     float* in_buffer = (float*)buffer;
-    float out_buffer[ctx->nfine_chan];  
+    int out_buffer_elements = ctx->nfine_chan * ctx->npol;
+    int out_buffer_bytes = out_buffer_elements * sizeof(float);
+    float out_buffer[out_buffer_elements];  
     int n_total_timesteps = 0;
+
+    float power_freq[ctx->nfine_chan];
+    float power_time[ctx->ntimes];
         
     for(int t=0;t<ctx->ntimes;t++)
     {
+        // Write out an entire timestep e.g. 1ms worth        
         for(int ch=0; ch<ctx->nfine_chan; ch++)
         {
-            int index = ch + t * ctx->nfine_chan;
-            out_buffer[ch] = in_buffer[index];                  
-        }             
+            for (int pol=0; pol<ctx->npol; pol++)
+            {
+              int input_index = (t * ctx->nfine_chan * ctx->npol) + (ch * ctx->npol) + pol;
+              int output_index = (ch * ctx->npol) + pol;
+
+              out_buffer[output_index] = in_buffer[input_index];              
+              
+              power_freq[ch] += in_buffer[input_index];              
+              power_time[t] += in_buffer[input_index];              
+            }            
+        }
+
+        // Create the fil block for this timestep
+        if (create_fil_block(client, &(ctx->out_filfile_ptr), ctx->nfine_chan, ctx->npol, out_buffer, out_buffer_bytes))    
+        {
+          // Error!
+          multilog(log, LOG_ERR, "dada_dbfil_io(): Error Writing into new fil block.\n");
+          return -1;
+        }
+        else
+        {             
+          wrote = out_buffer_bytes;
+          written += wrote;
+          ctx->obs_marker_number += 1; // Increment the marker number      
+        }  
 
         n_total_timesteps += 1;
-    }          
-
-    // Create the fil block
-    if (create_fil_block(client, &(ctx->out_filfile_ptr), ctx->obs_marker_number, out_buffer, bytes))    
-    {
-      // Error!
-      multilog(log, LOG_ERR, "dada_dbfil_io(): Error Writing into new fil block.\n");
-      return -1;
-    }
-    else
-    {             
-      wrote = to_write;
-      written += wrote;
-      ctx->obs_marker_number += 1; // Increment the marker number      
-    }  
+    }              
     
     ctx->block_number += 1;    
     ctx->bytes_written += written;
+
+    /* Make a new filename- oooooooooo_YYYYMMDDhhmmss_chCCC_FFF.fil */
+    char output_spectrum_filename[PATH_MAX];
+    snprintf(output_spectrum_filename, PATH_MAX, "%s/%ld_ch%02d_%02d_%03d_spec.txt", 
+            ctx->destination_dir, ctx->obs_id, ctx->coarse_channel, ctx->fil_file_number, ctx->block_number);
+
+    FILE* out_fs = fopen(output_spectrum_filename, "w");
+    for(int ch=0;ch<ctx->nfine_chan;ch++)
+    {
+        power_freq[ch] = power_freq[ch] /(float)ctx->ntimes;
+        
+        fprintf(out_fs,"%d %f\n",ch,power_freq[ch]);          
+    }
+    fclose(out_fs);
+
+    char output_time_filename[PATH_MAX];
+    snprintf(output_time_filename, PATH_MAX, "%s/%ld_ch%02d_%02d_%03d_time.txt", 
+            ctx->destination_dir, ctx->obs_id, ctx->coarse_channel, ctx->fil_file_number, ctx->block_number);
+
+    FILE* out_ft = fopen(output_time_filename, "w");
+    for(int t=0;t<ctx->ntimes;t++)
+    {
+        power_time[t] = power_time[t] / (float)ctx->nfine_chan;
+        
+        fprintf(out_ft,"%d %f\n",t,power_time[t]);          
+    }
+    fclose(out_ft);
+    printf("Average spectrum & power over time written to files\n");
 
     return bytes;
   }  
@@ -423,17 +466,38 @@ int read_dada_header(dada_client_t *client)
     multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_NFINE_CHAN);
     return -1;
   }  
+
+  if (ascii_header_get(client->header, HEADER_INT_TIME_MSEC, "%i", &ctx->int_time_msec) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_INT_TIME_MSEC);
+    return -1;
+  }  
+
+  if (ascii_header_get(client->header, HEADER_EXPOSURE_SECS, "%i", &ctx->exposure_sec) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_EXPOSURE_SECS);
+    return -1;
+  }  
   
+  if (ascii_header_get(client->header, HEADER_METADATA_BEAMS, "%i", &ctx->nbeams) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_METADATA_BEAMS);
+    return -1;
+  }  
+
   // Output what we found in the header
   multilog(log, LOG_INFO, "Obs Id:                   %lu\n", ctx->obs_id);
   multilog(log, LOG_INFO, "Subobs Id:                %lu\n", ctx->subobs_id);
   multilog(log, LOG_INFO, "Command:                  %s\n", ctx->command);  
-  multilog(log, LOG_INFO, "Start time (UTC):         %s\n", ctx->utc_start);
-  multilog(log, LOG_INFO, "No fine chans per coarse: %d\n", ctx->nfine_chan);
+  multilog(log, LOG_INFO, "Start time (UTC):         %s\n", ctx->utc_start);  
+  multilog(log, LOG_INFO, "Duration (secs):          %d\n", ctx->exposure_sec);  
+  multilog(log, LOG_INFO, "Beams:                    %d\n", ctx->nbeams);  
   multilog(log, LOG_INFO, "Bits per real/imag:       %d\n", ctx->nbit);  
   multilog(log, LOG_INFO, "Polarisations:            %d\n", ctx->npol);
-  multilog(log, LOG_INFO, "Coarse channel no.:       %d\n", ctx->coarse_channel);
+  multilog(log, LOG_INFO, "Coarse channel no.:       %d\n", ctx->coarse_channel);  
+  multilog(log, LOG_INFO, "No of chans per timestep: %d\n", ctx->nfine_chan);
+  multilog(log, LOG_INFO, "Samples/sec:              %d\n", ctx->int_time_msec);
   multilog(log, LOG_INFO, "Size of subobservation:   %lu bytes\n", ctx->transfer_size);
-
+  
   return EXIT_SUCCESS;
 }
