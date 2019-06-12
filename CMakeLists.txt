@@ -23,4 +23,4 @@ IF(CMAKE_COMPILER_IS_GNUCXX)
 ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 add_executable(mwax_beamdb2fil ${PROGSRC})       # define executable target prog, specify sources
-target_link_libraries(mwax_beamdb2fil pthread psrdada cudart m)   # -l flags for linking target
+target_link_libraries(mwax_beamdb2fil pthread psrdada m)   # -l flags for linking target

@@ -244,24 +244,34 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     
     uint64_t written  = 0;    
     uint64_t wrote    = 0;
-
+    
     multilog (log, LOG_DEBUG, "dada_dbfil_io(): Processing block %d.\n", ctx->block_number);
       
     multilog(log, LOG_INFO, "dada_dbfil_io(): Writing %d of %d bytes into new fil block; Marker = %d.\n", ctx->expected_transfer_size, bytes, ctx->obs_marker_number); 
         
+    int n_total_timesteps = 0;    
+    
     // Read ring buffer block and write data out    
     float* in_buffer = (float*)buffer;
     int out_buffer_elements = ctx->nfine_chan * ctx->npol;
-    int out_buffer_bytes = out_buffer_elements * sizeof(float);
-    float out_buffer[out_buffer_elements];  
-    int n_total_timesteps = 0;
+    int out_buffer_bytes = out_buffer_elements * sizeof(float);    
 
-    float power_freq[ctx->nfine_chan];
-    float power_time[ctx->ntimes];
-        
+    // Allocate arrays
+    float* out_buffer = calloc(out_buffer_elements, sizeof(float));      
+    double* power_freq = calloc(ctx->nfine_chan, sizeof(double));
+    double* power_time = calloc(ctx->ntimes, sizeof(double));
+
+    // Clear my time and freq stats arrays
+    memset(power_freq, 0, ctx->nfine_chan * sizeof(double));    
+
     for(int t=0;t<ctx->ntimes;t++)
     {
-        // Write out an entire timestep e.g. 1ms worth        
+        // Write out an entire timestep e.g. 1ms worth
+        //
+        // Clear output buffer
+        //
+        memset(out_buffer, 0, out_buffer_bytes);
+
         for(int ch=0; ch<ctx->nfine_chan; ch++)
         {
             for (int pol=0; pol<ctx->npol; pol++)
@@ -271,12 +281,15 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
 
               out_buffer[output_index] = in_buffer[input_index];              
               
-              power_freq[ch] += in_buffer[input_index];              
-              power_time[t] += in_buffer[input_index];              
-            }            
-        }
+              power_freq[ch] += (double)in_buffer[input_index];              
+              power_time[t] += (double)in_buffer[input_index];              
 
-        // Create the fil block for this timestep
+              if (t<=0 && ctx->block_number==0)
+                printf("t=%d; ch=%d; pol=%d; in_index=%d; out_index=%d value=%f;\n", t, ch, pol, input_index, output_index, in_buffer[input_index]);
+            }            
+        }        
+
+        // Create the fil block for this timestep        
         if (create_fil_block(client, &(ctx->out_filfile_ptr), ctx->nfine_chan, ctx->npol, out_buffer, out_buffer_bytes))    
         {
           // Error!
@@ -284,11 +297,11 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
           return -1;
         }
         else
-        {             
+        {   
           wrote = out_buffer_bytes;
           written += wrote;
-          ctx->obs_marker_number += 1; // Increment the marker number      
-        }  
+          ctx->obs_marker_number += 1; // Increment the marker number                
+        }
 
         n_total_timesteps += 1;
     }              
@@ -304,7 +317,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     FILE* out_fs = fopen(output_spectrum_filename, "w");
     for(int ch=0;ch<ctx->nfine_chan;ch++)
     {
-        power_freq[ch] = power_freq[ch] /(float)ctx->ntimes;
+        power_freq[ch] = power_freq[ch] /(double)ctx->ntimes;
         
         fprintf(out_fs,"%d %f\n",ch,power_freq[ch]);          
     }
@@ -317,12 +330,17 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     FILE* out_ft = fopen(output_time_filename, "w");
     for(int t=0;t<ctx->ntimes;t++)
     {
-        power_time[t] = power_time[t] / (float)ctx->nfine_chan;
+        power_time[t] = power_time[t] / (double)ctx->nfine_chan;
         
-        fprintf(out_ft,"%d %f\n",t,power_time[t]);          
+        fprintf(out_ft,"%d %f\n",t, power_time[t]);          
     }
     fclose(out_ft);
     printf("Average spectrum & power over time written to files\n");
+
+    // Cleanup
+    free(out_buffer);
+    free(power_freq);
+    free(power_time);
 
     return bytes;
   }  

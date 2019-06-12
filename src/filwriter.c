@@ -52,7 +52,7 @@ int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
   // Populate header
   filheader.telescope_id = 0;                                               // FAKE
   filheader.machine_id = 0;                                                 // FAKE
-  filheader.data_type = 2;                                                  // 1 - filterbank; 2 - timeseries
+  filheader.data_type = 1;                                                  // 1 - filterbank; 2 - timeseries
   strncpy(filheader.rawdatafile, ctx->fil_filename, 4096);
   strncpy(filheader.source_name, "None", 4096);  
   filheader.barycentric = 0;
