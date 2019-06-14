@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "filfile.h"
 
 //
@@ -62,7 +63,16 @@ int CFilFile_WriteHeader(cFilFile *filfile_ptr, const cFilFileHeader* filHeader 
     CFilFile_WriteKeyword_int(filfile_ptr, "ibeam" , filHeader->ibeam );
     CFilFile_WriteKeyword_double(filfile_ptr, "fch1" , filHeader->fch1 );
     CFilFile_WriteKeyword_double(filfile_ptr, "foff" , filHeader->foff );
-    CFilFile_WriteKeyword_double(filfile_ptr, "fchannel" , filHeader->fchannel );
+    
+    CFilFile_WriteKeyword_string(filfile_ptr, "FREQUENCY_START", NULL);
+
+    for (int ch=0; ch<filHeader->nchans; ch++)
+    {
+        CFilFile_WriteKeyword_double(filfile_ptr, "fchannel" , filHeader->fchannel[ch] );
+    }
+
+    CFilFile_WriteKeyword_string(filfile_ptr, "FREQUENCY_END", NULL);
+
     CFilFile_WriteKeyword_int(filfile_ptr, "nchans" , filHeader->nchans );
     CFilFile_WriteKeyword_int(filfile_ptr, "nifs" , filHeader->nifs );
     CFilFile_WriteKeyword_double(filfile_ptr, "refdm" , filHeader->refdm );
@@ -161,13 +171,13 @@ void CFilFileHeader_Constructor(cFilFileHeader* filefileheader_ptr)
     filefileheader_ptr->nsamples = 0;
     filefileheader_ptr->nbeams = 1;
     filefileheader_ptr->ibeam = 0;
-    filefileheader_ptr->fch1 = 150.00,
+    filefileheader_ptr->fch1 = 0,
     filefileheader_ptr->foff = -0.001;
-    filefileheader_ptr->fchannel = 0.001;
-    filefileheader_ptr->nchans = 1280;
-    filefileheader_ptr->nifs = 1;
+    filefileheader_ptr->fchannel = NULL;
+    filefileheader_ptr->nchans = 0;
+    filefileheader_ptr->nifs = 0;
     filefileheader_ptr->refdm = 0;
-    filefileheader_ptr->period = 0.00f;
+    filefileheader_ptr->period = 0;
     filefileheader_ptr->npuls = 0;
     filefileheader_ptr->nbins = 0;
 }

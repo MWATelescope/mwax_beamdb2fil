@@ -7,16 +7,7 @@
  */
 #pragma once
 
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "ascii_header.h"
-#include "dada_def.h"
 #include "dada_client.h"
-#include "dada_hdu.h"
-#include "multilog.h"
-#include "global.h"
 
 // function prototypes
 int dada_dbfil_open(dada_client_t *client);

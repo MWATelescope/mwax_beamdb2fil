@@ -1,7 +1,5 @@
 #pragma once
 
-#include <stdio.h>
-#include <string.h>
 #include <linux/limits.h>
 
 // grep strcmp ../read_filfile.c  | awk '{ ind=index($0,"\"");line=substr($0,ind+1);end=index(line,"\"");key=substr(line,0,end-1);type=substr($7,2,1);type_enum="eFilHdrUnknown";if(type=="f"){type_enum="eFilHdrFlag";}if(type=="i"){type_enum="eFilHdrInt";} if(type=="s"){type_enum="eFilHdrStr";} if(type=="d"){type_enum="eFilHdrDouble";}  if(type=="b"){type_enum="eFilHdrBool";}  print "   "type_enum" "key";";}'
@@ -29,7 +27,7 @@ typedef struct CFilFileHeader
    int ibeam;
    double fch1;
    double foff;
-   double fchannel;
+   double* fchannel;
    long nchans;
    int nifs;
    double refdm;

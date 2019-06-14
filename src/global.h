@@ -9,13 +9,15 @@
 
 #define HAVE_HWLOC      // This is used by the psrdada library to set if we have the hwloc library or not. This lib is used to abstract NUMA / architecture.
 
-#include <linux/limits.h>
-#include <pthread.h>
+//#include <linux/limits.h>
+//#include <pthread.h>
 #include <stdint.h>
+#include <fitsio.h>
 #include "filfile.h"
-#include "filwriter.h"
+//#include "filwriter.h"
 #include "multilog.h"
 
+#define FIL_SIZE_CUTOFF_BYTES   200000
 #define MWAX_COMMAND_LEN        32    // Size of the command in PSRDADA header. E.g. "CAPTURE","QUIT","IDLE"
 #define UTC_START_LEN           20    // Size of UTC_START in the PSRDADA header (e.g. 2018-08-08-08:00:00)
 #define HOST_NAME_LEN           64    // Length of hostname
@@ -24,11 +26,22 @@
 typedef struct beam_s {
     long time_integration;            // i.e. time-scrunch factor, e.g. 10 means sum 10 powers samples per output
     long ntimesteps;                  // how many timesteps per second
-    long nchan;                        // number of channels
-
+    long nchan;                       // number of channels
+    double* channels;                 // array of fine channel centres (MHz)
     double* power_freq;               // Stats by freq
     double* power_time;               // Stats by time
 } beam_s;
+
+typedef struct metafits_s {
+    long obsid;
+    double azimuth;
+    double altitude;
+    double ra;
+    double dec;
+    double mjd;
+    char* filename;                     // This is really the obs/source name
+    char* channels_string;
+} metafits_s;
 
 typedef struct dada_db_s {
     // PSRDADA stuff
@@ -45,7 +58,13 @@ typedef struct dada_db_s {
     char hostname[HOST_NAME_LEN+1];
     
     // Stats
-    char* stats_dir;    
+    char* stats_dir;   
+
+    // metafits
+    char* metafits_path;
+    char metafits_filename[PATH_MAX];
+    fitsfile* in_metafits_ptr;
+    metafits_s* metafits_info;
 
     // FIL info
     char* destination_dir;    
@@ -61,8 +80,7 @@ typedef struct dada_db_s {
     int coarse_channel;
     int nbit;
     int npol;
-    //int nfine_chan;
-    //int ntimesteps;
+    int bandwidth_hz;
     int nbeams;    
     int exposure_sec;
     uint64_t transfer_size;

@@ -13,10 +13,12 @@
 #include <signal.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <string.h>
 
+#include "global.h"
 #include "args.h"
 #include "dada_dbfil.h"
-#include "global.h"
+#include "dada_hdu.h"
 #include "health.h"
 #include "multilog.h"
 
@@ -95,7 +97,7 @@ int main(int argc, char* argv[])
     multilog(g_ctx.log, LOG_INFO, "* Stats path:           [Not generating stats]\n");
   else
     multilog(g_ctx.log, LOG_INFO, "* Stats path:           %s\n", globalArgs.stats_path);
-  
+  multilog(g_ctx.log, LOG_INFO, "* Metafits path:        %s\n", globalArgs.metafits_path);
   multilog(g_ctx.log, LOG_INFO, "* Health UDP IP:        %s\n", globalArgs.health_ip);
   multilog(g_ctx.log, LOG_INFO, "* Health UDP Port:      %d\n", globalArgs.health_port);
   
@@ -132,6 +134,7 @@ int main(int argc, char* argv[])
   // Pass stuff to the context
   g_ctx.destination_dir = globalArgs.destination_path;
   g_ctx.stats_dir = globalArgs.stats_path;
+  g_ctx.metafits_path = globalArgs.metafits_path;
   
   // set up DADA read client
   multilog(g_ctx.log, LOG_INFO, "main(): Creating DADA client...\n", globalArgs.input_db_key);

@@ -5,9 +5,16 @@
  * @brief This is the code that drives the ring buffers
  *
  */
+#include <assert.h>
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
+
+#include "global.h"
 #include "dada_dbfil.h"
+#include "ascii_header.h"
+#include "filwriter.h"
+#include "metafitsreader.h"
 #include "mwax_global_defs.h" // From mwax-common
 
 /**
@@ -100,7 +107,7 @@ int dada_dbfil_open(dada_client_t* client)
   // Check this obs_id against our 'in progress' obsid  
   if (ctx->obs_id != this_obs_id || ctx->bytes_written >= FIL_SIZE_CUTOFF_BYTES)
   {
-    // We need a new fits file
+    // We need a new fil file
     if (ctx->obs_id != this_obs_id)
     {
       if (&(ctx->out_filfile_ptr) != NULL)
@@ -155,6 +162,35 @@ int dada_dbfil_open(dada_client_t* client)
         return -1;
       }      
 
+      // Open and Read metafits file            
+      snprintf(ctx->metafits_filename, PATH_MAX, "%s/%ld.metafits", ctx->metafits_path, ctx->obs_id);
+
+      multilog(log, LOG_INFO,"dada_dbfil_open(): Reading metafits file: %s\n", ctx->metafits_filename);
+
+      if (open_fits(client, &ctx->in_metafits_ptr, ctx->metafits_filename) != EXIT_SUCCESS)
+      {
+        // Error!        
+        return EXIT_FAILURE;
+      }
+
+      // Read data from metafits
+      if (ctx->metafits_info != 0)
+        free(ctx->metafits_info);
+
+      ctx->metafits_info = malloc(sizeof(metafits_s));
+
+      if (read_metafits(client, ctx->in_metafits_ptr, ctx->metafits_info) != EXIT_SUCCESS)
+      {
+        // Error!        
+        return EXIT_FAILURE;
+      }
+
+      // Close metafits
+      if (close_fits(client, &ctx->in_metafits_ptr) != EXIT_SUCCESS)
+      {
+        // Error!        
+        return EXIT_FAILURE;
+      }
       /*                          */
       /* Sanity check what we got */
       /*                          */            
@@ -202,7 +238,7 @@ int dada_dbfil_open(dada_client_t* client)
     /* Make a new filename- oooooooooo_YYYYMMDDhhmmss_chCCC_FFF.fil */
     snprintf(ctx->fil_filename, PATH_MAX, "%s/%ld_%04d%02d%02d%02d%02d%02d_ch%02d_%03d.fil", ctx->destination_dir, ctx->obs_id, year, month, day, hour, minute, second, ctx->coarse_channel, ctx->fil_file_number);
     
-    if (create_fil(client, &(ctx->out_filfile_ptr))) 
+    if (create_fil(client, &(ctx->out_filfile_ptr), ctx->metafits_info)) 
     {
       multilog(log, LOG_ERR,"dada_dbfil_open(): Error creating new fil file.\n");
       return -1;
@@ -483,6 +519,12 @@ int read_dada_header(dada_client_t *client)
     return -1;
   }
 
+  if (ascii_header_get(client->header, HEADER_BANDWIDTH_HZ, "%i", &ctx->bandwidth_hz) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_BANDWIDTH_HZ);
+    return -1;
+  }  
+
   if (ascii_header_get(client->header, HEADER_EXPOSURE_SECS, "%i", &ctx->exposure_sec) == -1)
   {
     multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_EXPOSURE_SECS);
@@ -545,6 +587,20 @@ int read_dada_header(dada_client_t *client)
     ctx->expected_transfer_size = ctx->expected_transfer_size + (ctx->beams[beam_index].ntimesteps * ctx->beams[beam_index].nchan * ctx->npol * (ctx->nbit/8));
   }
 
+  // Calculate start freq of each fine channel
+  long start_chan_hz = ctx->coarse_channel * ctx->bandwidth_hz;
+  int fine_chan_width_hz = ctx->bandwidth_hz / ctx->beams[0].nchan;
+
+  // allocate space for the fine channel frequencies
+  if (ctx->beams[0].channels != 0)
+    free(ctx->beams[0].channels);
+  ctx->beams[0].channels = calloc(ctx->beams[0].nchan, sizeof(double));
+
+  for (int ch=0; ch < ctx->beams[0].nchan; ch++)
+  {
+    ctx->beams[0].channels[ch] = (start_chan_hz + ((ch+0.5) * fine_chan_width_hz)) / 1000000.0f;
+  }
+
   // Output what we found in the header
   multilog(log, LOG_INFO, "Obs Id:                   %lu\n", ctx->obs_id);
   multilog(log, LOG_INFO, "Subobs Id:                %lu\n", ctx->subobs_id);
@@ -553,18 +609,24 @@ int read_dada_header(dada_client_t *client)
   multilog(log, LOG_INFO, "Duration (secs):          %d\n", ctx->exposure_sec);    
   multilog(log, LOG_INFO, "Bits per real/imag:       %d\n", ctx->nbit);  
   multilog(log, LOG_INFO, "Polarisations:            %d\n", ctx->npol);
-  multilog(log, LOG_INFO, "Coarse channel no.:       %d\n", ctx->coarse_channel);  
-  multilog(log, LOG_INFO, "Size of subobservation:   %lu bytes\n", ctx->transfer_size);
+  multilog(log, LOG_INFO, "Coarse channel no.:       %d\n", ctx->coarse_channel);      
+  multilog(log, LOG_INFO, "Coarse Channel Bandwidth: %d Hz\n", ctx->bandwidth_hz);   
+  multilog(log, LOG_INFO, "Size of subobservation:   %lu bytes\n", ctx->transfer_size); 
   multilog(log, LOG_INFO, "Beams:                    %d\n", ctx->nbeams);    
 
   for (int beam=0; beam < ctx->nbeams; beam++)
   {
-    multilog(log, LOG_INFO, "..Beam %.2d channels:            %d\n", beam+1, ctx->beams[beam].nchan);
     multilog(log, LOG_INFO, "..Beam %.2d time int (tscrunch): %ld\n", beam+1, ctx->beams[beam].time_integration);
     multilog(log, LOG_INFO, "..Beam %.2d timesteps/sec:       %ld\n", beam+1, ctx->beams[beam].ntimesteps);    
+    multilog(log, LOG_INFO, "..Beam %.2d channels:            %d\n", beam+1, ctx->beams[beam].nchan);    
+
+    for (int ch=0; ch < ctx->beams[0].nchan; ch++)
+    {
+      // Enable this for debug! If lots of channels it can be big!
+      //multilog(log, LOG_INFO, "..Beam %.2d ch %d %f MHz\n", beam+1, ch, ctx->beams[beam].channels[ch]);
+    }
+
   }
-  //multilog(log, LOG_INFO, "No of chans per timestep: %d\n", ctx->nfine_chan);
-  //multilog(log, LOG_INFO, "Timesteps:                %d\n", ctx->ntimesteps);  
-  
+    
   return EXIT_SUCCESS;
 }

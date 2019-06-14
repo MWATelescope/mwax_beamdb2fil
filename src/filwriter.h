@@ -8,13 +8,8 @@
 #pragma once
 
 #include "dada_client.h"
-#include "filfile.h"
+#include "global.h"
 
-#define FIL_SIZE_CUTOFF_BYTES 200000
-
-// Keys and some hard coded values for the header of the fil file produced
-//#define MWA_FITS_KEY_SIMPLE "SIMPLE"
-
-int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr);
+int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr, metafits_s *metafits);
 int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr);
 int create_fil_block(dada_client_t *client, cFilFile *out_filfile_ptr, int bytes_per_sample, long timesteps, long fine_channels, int polarisations, float *buffer, uint64_t bytes);

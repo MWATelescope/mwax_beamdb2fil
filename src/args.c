@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include "args.h"
 #include "global.h"
-#include "multilog.h"
 
 /**
  * 
