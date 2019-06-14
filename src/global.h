@@ -21,6 +21,15 @@
 #define HOST_NAME_LEN           64    // Length of hostname
 #define IP_AS_STRING_LEN        15    // xxx.xxx.xxx.xxx   
 
+typedef struct beam_s {
+    long time_integration;            // i.e. time-scrunch factor, e.g. 10 means sum 10 powers samples per output
+    long ntimesteps;                  // how many timesteps per second
+    long nchan;                        // number of channels
+
+    double* power_freq;               // Stats by freq
+    double* power_time;               // Stats by time
+} beam_s;
+
 typedef struct dada_db_s {
     // PSRDADA stuff
     uint64_t header_size;     // size of the DADA header blocks
@@ -35,6 +44,9 @@ typedef struct dada_db_s {
     // Common
     char hostname[HOST_NAME_LEN+1];
     
+    // Stats
+    char* stats_dir;    
+
     // FIL info
     char* destination_dir;    
     char fil_filename[PATH_MAX];
@@ -49,12 +61,13 @@ typedef struct dada_db_s {
     int coarse_channel;
     int nbit;
     int npol;
-    int nfine_chan;
-    int ntimes;
-    int nbeams;
-    int int_time_msec;
+    //int nfine_chan;
+    //int ntimesteps;
+    int nbeams;    
     int exposure_sec;
     uint64_t transfer_size;
+
+    beam_s *beams;
 
     // Not from header- calculated values
     int obs_marker_number;               

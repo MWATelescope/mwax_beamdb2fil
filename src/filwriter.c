@@ -62,7 +62,7 @@ int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
   filheader.src_raj = 0;                                                    // RA (J2000) of source
   filheader.src_dej = 0;                                                    // DEC (J2000) of source
   filheader.tstart = 0;                                                     // Timestamp MJD of first sample
-  filheader.tsamp = ctx->ntimes / 1000.0;                                   // time interval between samples (seconds)
+  filheader.tsamp = 1.0f / ctx->beams[0].ntimesteps;                                 // time interval between samples (seconds)
   filheader.nbits = ctx->nbit;                                              // bits per time sample
   filheader.fch1 = 0;                                                       // Centre freq (MHz) of first channel
   filheader.foff = 1.28;                                                    // filterbank channel bandwidth (MHz)  
@@ -70,15 +70,15 @@ int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
   // This is an array of channels (in MHz)
   filheader.fchannel = 0;   
 
-  filheader.nchans = ctx->nfine_chan;
+  filheader.nchans = ctx->beams[0].nchan;
   filheader.nifs = ctx->npol;                                               // Number of IF channels(polarisations I think)
   filheader.refdm = 0;                                                      // reference dispersion measure (cm^−3 pc)
   filheader.period = 0;                                                     // folding period (s)
   filheader.npuls = 0;        
-  filheader.nbins = ctx->ntimes;
+  filheader.nbins = ctx->beams[0].ntimesteps;
   
   strncpy(filheader.signed_, " ", 1);
-  filheader.nsamples = ctx->ntimes * ctx->nfine_chan * ctx->npol * ctx->exposure_sec; // number of time samples in the data file (rarely used)
+  filheader.nsamples = ctx->beams[0].ntimesteps * ctx->beams[0].nchan * ctx->npol * ctx->exposure_sec; // number of time samples in the data file (rarely used)
   filheader.nbeams = ctx->nbeams;
   filheader.ibeam = 0;
 
@@ -131,13 +131,16 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
  *  @brief Creates a new block in an existing fil file.
  *  @param[in] client A pointer to the dada_client_t object.
  *  @param[in] fptr Pointer to the fil file we will write to.
+ *  @param[in] bytes_per_sample The number of bytes per sample.
+ *  @param[in] timesteps The number of timesteps to write.
  *  @param[in] fine_channels The number of fine channels.
  *  @param[in] polarisations The number of pols in each beam.
  *  @param[in] buffer The pointer to the data to write into the block.
  *  @param[in] bytes The number of bytes in the buffer to write.
  *  @returns EXIT_SUCCESS on success, or EXIT_FAILURE if there was an error.
  */
-int create_fil_block(dada_client_t *client, cFilFile *out_filfile_ptr, int fine_channels, int polarisations, float *buffer, uint64_t bytes)
+int create_fil_block(dada_client_t *client, cFilFile *out_filfile_ptr, int bytes_per_sample, long timesteps, 
+                     long fine_channels, int polarisations, float *buffer, uint64_t bytes)
 {
   assert(client != 0);
   dada_db_s* ctx = (dada_db_s*) client->context;
@@ -146,13 +149,25 @@ int create_fil_block(dada_client_t *client, cFilFile *out_filfile_ptr, int fine_
   multilog_t *log = (multilog_t *) ctx->log;
 
   // write stuff
-  int out_floats = CFilFile_WriteData(out_filfile_ptr, buffer, fine_channels * polarisations);
+  uint64_t buffer_elements = timesteps * fine_channels * polarisations;
+  uint64_t in_check_bytes = buffer_elements * bytes_per_sample;
 
-  if (out_floats*sizeof(float) != bytes)
+  if (in_check_bytes != bytes)
   {
     // Error
     char error_text[30]="";      
-    multilog(log, LOG_ERR, "create_fil_block(): Error writing fil file block. Number of bytes %d != %d floats * sizeof(float) Error: %s\n", bytes, out_floats * sizeof(float),error_text);
+    multilog(log, LOG_ERR, "create_fil_block(): Error writing fil file block. Number of bytes %" PRIu64 " != %" PRIu64 " (samples * bytes per sample)-> (t: %d, f: %d p: %d b: %d) Error: %s\n", bytes, in_check_bytes, timesteps, fine_channels, polarisations, bytes_per_sample, error_text);
+    return EXIT_FAILURE;
+  }
+
+  int out_samples = CFilFile_WriteData(out_filfile_ptr, buffer, buffer_elements);
+  uint64_t out_check_bytes = out_samples * bytes_per_sample;
+
+  if (out_check_bytes != bytes)
+  {
+    // Error
+    char error_text[30]="";      
+    multilog(log, LOG_ERR, "create_fil_block(): Error writing fil file block. Number of bytes written %d != %d (samples * bytes per sample) Error: %s\n", bytes, out_check_bytes, error_text);
     return EXIT_FAILURE;
   }
 

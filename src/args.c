@@ -23,18 +23,22 @@
 int process_args(int argc, char* argv[], globalArgs_s* globalArgs)
 {
     globalArgs->input_db_key = 0;        
+    globalArgs->metafits_path = NULL;
     globalArgs->destination_path = NULL;
     globalArgs->health_ip = NULL;
     globalArgs->health_port = 0;
+    globalArgs->stats_path = NULL;
     
-    static const char *optString = "k:d:i:p:?";
+    static const char *optString = "k:m:d:i:p:?";
 
 	static const struct option longOpts[] =
 	{
 		{ "key", required_argument, NULL, 'k' },        
+        { "metafits-path", required_argument, NULL, 'm' },
         { "destination-path", required_argument, NULL, 'd' },
         { "health-ip", required_argument, NULL, 'i' },
         { "health-port", required_argument, NULL, 'p' },
+        { "stats-path", optional_argument, NULL, 's' },
 	    { "help", no_argument, NULL, '?' },
 	    { NULL, no_argument, NULL, 0 }
 	};
@@ -55,6 +59,10 @@ int process_args(int argc, char* argv[], globalArgs_s* globalArgs)
                 globalArgs->destination_path = optarg;
                 break;
 
+            case 'm':
+                globalArgs->metafits_path = optarg;
+                break;
+
             case 'i':
                 globalArgs->health_ip = optarg;
                 break;
@@ -63,6 +71,10 @@ int process_args(int argc, char* argv[], globalArgs_s* globalArgs)
                 globalArgs->health_port = atoi(optarg);
                 break;
             
+            case 's':
+                globalArgs->stats_path = optarg;
+                break;
+
             case '?':
                 print_usage();
                 return EXIT_FAILURE;
@@ -78,6 +90,12 @@ int process_args(int argc, char* argv[], globalArgs_s* globalArgs)
     // Check that mandatory parameters are passed
     if (!globalArgs->input_db_key) {
         fprintf(stderr, "Error: input shared memory key (-k | --key) is mandatory.\n");
+        print_usage();
+        exit(1);
+    }
+
+    if (!globalArgs->metafits_path) {
+        fprintf(stderr, "Error: metafits path (-m | --metafits-path) is mandatory.\n");
         print_usage();
         exit(1);
     }
@@ -115,7 +133,9 @@ void print_usage()
     printf("It will then write out a filterbank (fil) file to the destination dir.\n\n");
 	printf("  -k --key=KEY                Hexadecimal shared memory key\n");    
     printf("  -d --destination-path=PATH  Destination path for gpubox files\n");
+    printf("  -m --metafits-path=PATH     Metafits directory path\n");
     printf("  -i --health-ip=IP           Health UDP destination ip address\n");
     printf("  -p --health-port=PORT       Health UDP destination port\n");
+    printf("  -s --stats-path=PATH        (Optional) Statistics directory path\n");    
 	printf("  -? --help                   This help text\n");
 }

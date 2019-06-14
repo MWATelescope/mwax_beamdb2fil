@@ -17,4 +17,4 @@
 
 int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr);
 int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr);
-int create_fil_block(dada_client_t *client, cFilFile *out_filfile_ptr, int fine_channels, int polarisations, float *buffer, uint64_t bytes);
+int create_fil_block(dada_client_t *client, cFilFile *out_filfile_ptr, int bytes_per_sample, long timesteps, long fine_channels, int polarisations, float *buffer, uint64_t bytes);

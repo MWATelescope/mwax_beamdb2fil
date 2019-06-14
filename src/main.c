@@ -90,6 +90,12 @@ int main(int argc, char* argv[])
   multilog(g_ctx.log, LOG_INFO, "Command line options used:\n");
   multilog(g_ctx.log, LOG_INFO, "* Shared Memory key:    %x\n", globalArgs.input_db_key);
   multilog(g_ctx.log, LOG_INFO, "* Destination path:     %s\n", globalArgs.destination_path);
+  
+  if (!globalArgs.stats_path)
+    multilog(g_ctx.log, LOG_INFO, "* Stats path:           [Not generating stats]\n");
+  else
+    multilog(g_ctx.log, LOG_INFO, "* Stats path:           %s\n", globalArgs.stats_path);
+  
   multilog(g_ctx.log, LOG_INFO, "* Health UDP IP:        %s\n", globalArgs.health_ip);
   multilog(g_ctx.log, LOG_INFO, "* Health UDP Port:      %d\n", globalArgs.health_port);
   
@@ -125,6 +131,7 @@ int main(int argc, char* argv[])
 
   // Pass stuff to the context
   g_ctx.destination_dir = globalArgs.destination_path;
+  g_ctx.stats_dir = globalArgs.stats_path;
   
   // set up DADA read client
   multilog(g_ctx.log, LOG_INFO, "main(): Creating DADA client...\n", globalArgs.input_db_key);

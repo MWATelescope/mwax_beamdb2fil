@@ -14,7 +14,9 @@ typedef struct
 {
     key_t input_db_key;    
     char* destination_path;
+    char* metafits_path;    
     char* health_ip;
+    char* stats_path;    
     int health_port;    
 } globalArgs_s;
 

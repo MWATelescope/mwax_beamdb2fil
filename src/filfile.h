@@ -24,13 +24,13 @@ typedef struct CFilFileHeader
    double tsamp;
    int nbits;
    char signed_[1]; // TODO verify this one -> signed is a restricted keyword in C/C++ -> added _. GJS- was char, made it char[1]
-   int nsamples;
+   long nsamples;
    int nbeams;
    int ibeam;
    double fch1;
    double foff;
    double fchannel;
-   int nchans;
+   long nchans;
    int nifs;
    double refdm;
    double period;
