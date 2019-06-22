@@ -17,7 +17,6 @@
 //#include "filwriter.h"
 #include "multilog.h"
 
-#define FIL_SIZE_CUTOFF_BYTES   200000
 #define MWAX_COMMAND_LEN        32    // Size of the command in PSRDADA header. E.g. "CAPTURE","QUIT","IDLE"
 #define UTC_START_LEN           20    // Size of UTC_START in the PSRDADA header (e.g. 2018-08-08-08:00:00)
 #define HOST_NAME_LEN           64    // Length of hostname
@@ -84,6 +83,7 @@ typedef struct dada_db_s {
     int nbeams;    
     int exposure_sec;
     uint64_t transfer_size;
+    int secs_per_subobs;
 
     beam_s *beams;
 

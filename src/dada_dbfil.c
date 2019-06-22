@@ -105,24 +105,17 @@ int dada_dbfil_open(dada_client_t* client)
   }
 
   // Check this obs_id against our 'in progress' obsid  
-  if (ctx->obs_id != this_obs_id || ctx->bytes_written >= FIL_SIZE_CUTOFF_BYTES)
+  if (ctx->obs_id != this_obs_id)
   {
     // We need a new fil file
-    if (ctx->obs_id != this_obs_id)
+    if (&(ctx->out_filfile_ptr) != NULL)
     {
-      if (&(ctx->out_filfile_ptr) != NULL)
-      {
-        multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Closing %lu, Starting %lu...\n", HEADER_OBS_ID, ctx->obs_id, this_obs_id);
-      }
-      else
-      {
-        multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Starting %lu...\n", HEADER_OBS_ID, this_obs_id);
-      }      
+      multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Closing %lu, Starting %lu...\n", HEADER_OBS_ID, ctx->obs_id, this_obs_id);
     }
     else
     {
-      multilog(log, LOG_INFO, "dada_dbfil_open(): Exceeded max size %lu of a fits file. Closing %s, Starting new file...\n", FIL_SIZE_CUTOFF_BYTES, ctx->fil_filename);
-    }
+      multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Starting %lu...\n", HEADER_OBS_ID, this_obs_id);
+    }      
 
     // Close existing fits file (if we have one)    
     if (&(ctx->out_filfile_ptr) != NULL)
@@ -134,100 +127,92 @@ int dada_dbfil_open(dada_client_t* client)
       }
     }
     
-    if (ctx->obs_id != this_obs_id)
+    //
+    // Do this for new observations only
+    //
+
+    // initialise our structure
+    ctx->block_open = 0;
+    ctx->bytes_read = 0;
+    ctx->bytes_written = 0;
+    ctx->curr_block = 0;
+    ctx->block_number= 0;
+
+    // fil info  
+    strncpy(ctx->fil_filename, "", PATH_MAX);      
+
+    // Set the obsid & sub obsid 
+    ctx->obs_id = this_obs_id;
+    ctx->subobs_id = this_subobs_id;
+
+    // Read in all of the info from the header into our struct
+    if (read_dada_header(client))
     {
-      //
-      // Do this for new observations only
-      //
+      // Error processing in header!
+      multilog(log, LOG_ERR,"dada_dbfil_open(): Error processing header.\n");
+      return -1;
+    }      
 
-      // initialise our structure
-      ctx->block_open = 0;
-      ctx->bytes_read = 0;
-      ctx->bytes_written = 0;
-      ctx->curr_block = 0;
-      ctx->block_number= 0;
+    // Open and Read metafits file            
+    snprintf(ctx->metafits_filename, PATH_MAX, "%s/%ld.metafits", ctx->metafits_path, ctx->obs_id);
 
-      // fil info  
-      strncpy(ctx->fil_filename, "", PATH_MAX);      
+    multilog(log, LOG_INFO,"dada_dbfil_open(): Reading metafits file: %s\n", ctx->metafits_filename);
 
-      // Set the obsid & sub obsid 
-      ctx->obs_id = this_obs_id;
-      ctx->subobs_id = this_subobs_id;
-
-      // Read in all of the info from the header into our struct
-      if (read_dada_header(client))
-      {
-        // Error processing in header!
-        multilog(log, LOG_ERR,"dada_dbfil_open(): Error processing header.\n");
-        return -1;
-      }      
-
-      // Open and Read metafits file            
-      snprintf(ctx->metafits_filename, PATH_MAX, "%s/%ld.metafits", ctx->metafits_path, ctx->obs_id);
-
-      multilog(log, LOG_INFO,"dada_dbfil_open(): Reading metafits file: %s\n", ctx->metafits_filename);
-
-      if (open_fits(client, &ctx->in_metafits_ptr, ctx->metafits_filename) != EXIT_SUCCESS)
-      {
-        // Error!        
-        return EXIT_FAILURE;
-      }
-
-      // Read data from metafits
-      if (ctx->metafits_info != 0)
-        free(ctx->metafits_info);
-
-      ctx->metafits_info = malloc(sizeof(metafits_s));
-
-      if (read_metafits(client, ctx->in_metafits_ptr, ctx->metafits_info) != EXIT_SUCCESS)
-      {
-        // Error!        
-        return EXIT_FAILURE;
-      }
-
-      // Close metafits
-      if (close_fits(client, &ctx->in_metafits_ptr) != EXIT_SUCCESS)
-      {
-        // Error!        
-        return EXIT_FAILURE;
-      }
-      /*                          */
-      /* Sanity check what we got */
-      /*                          */            
-      /* unix time msec must be between 0 and 999 
-      if (!(ctx->unix_time_msec >= 0 || ctx->unix_time_msec<1000))
-      {
-        multilog(log, LOG_ERR, "dada_dbfil_open(): %s must be between 0 and 999 milliseconds.\n", HEADER_UNIXTIME_MSEC);
-        return -1;
-      } */
-      
-      //
-      // Check transfer size read in from header matches what we expect from the other params      
-      //     
-      // one sub obs = beams * pols * timesteps per chan * chans * size of a sample
-      //             
-      // The number of bytes should never exceed transfer size
-      if (ctx->expected_transfer_size > ctx->transfer_size)
-      {
-        multilog(log, LOG_ERR, "dada_dbfil_open(): %s provided in header (%lu bytes) is not large enough for a subobservation size of (%lu bytes).\n", HEADER_TRANSFER_SIZE, ctx->transfer_size, ctx->expected_transfer_size);
-        return -1; 
-      }
-
-      // Also confirm that the integration size can fit into the ringbuffer size
-      if (ctx->expected_transfer_size > ctx->block_size)
-      {
-        multilog(log, LOG_ERR, "dada_dbfil_open(): Ring buffer block size (%lu bytes) is less than the calculated size of an integration from header parameters (%lu bytes).\n", ctx->block_size, ctx->expected_transfer_size);
-        return -1;
-      }
-      
-      // Reset the filenumber
-      ctx->fil_file_number = 0;      
-    }
-    else
+    if (open_fits(client, &ctx->in_metafits_ptr, ctx->metafits_filename) != EXIT_SUCCESS)
     {
-      // Do this only if we exceeded the size of a fits file and need a new file
-      ctx->fil_file_number++;
+      // Error!        
+      exit(EXIT_FAILURE);
     }
+
+    // Read data from metafits
+    if (ctx->metafits_info != 0)
+      free(ctx->metafits_info);
+
+    ctx->metafits_info = malloc(sizeof(metafits_s));
+
+    if (read_metafits(client, ctx->in_metafits_ptr, ctx->metafits_info) != EXIT_SUCCESS)
+    {
+      // Error!        
+      return EXIT_FAILURE;
+    }
+
+    // Close metafits
+    if (close_fits(client, &ctx->in_metafits_ptr) != EXIT_SUCCESS)
+    {
+      // Error!        
+      return EXIT_FAILURE;
+    }
+    /*                          */
+    /* Sanity check what we got */
+    /*                          */            
+    /* unix time msec must be between 0 and 999 
+    if (!(ctx->unix_time_msec >= 0 || ctx->unix_time_msec<1000))
+    {
+      multilog(log, LOG_ERR, "dada_dbfil_open(): %s must be between 0 and 999 milliseconds.\n", HEADER_UNIXTIME_MSEC);
+      return -1;
+    } */
+    
+    //
+    // Check transfer size read in from header matches what we expect from the other params      
+    //     
+    // one sub obs = beams * pols * timesteps per chan * chans * size of a sample
+    //             
+    // The number of bytes should never exceed transfer size
+    if (ctx->expected_transfer_size > ctx->transfer_size)
+    {
+      multilog(log, LOG_ERR, "dada_dbfil_open(): %s provided in header (%lu bytes) is not large enough for a subobservation size of (%lu bytes).\n", HEADER_TRANSFER_SIZE, ctx->transfer_size, ctx->expected_transfer_size);
+      return -1; 
+    }
+
+    // Also confirm that the integration size can fit into the ringbuffer size
+    if (ctx->expected_transfer_size > ctx->block_size)
+    {
+      multilog(log, LOG_ERR, "dada_dbfil_open(): Ring buffer block size (%lu bytes) is less than the calculated size of an integration from header parameters (%lu bytes).\n", ctx->block_size, ctx->expected_transfer_size);
+      return -1;
+    }
+    
+    // Reset the filenumber
+    ctx->fil_file_number = 0;      
 
     /* Create fil file for output                                */
     /* Work out the name of the file using the UTC START          */
@@ -283,14 +268,14 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     
     // Read ring buffer block and write data out    
     float* in_buffer = (float*)buffer;
-    int out_buffer_elements = 0;
+    long out_buffer_elements = 0;
 
     for (int beam=0; beam < ctx->nbeams; beam++)
     {
       out_buffer_elements += ctx->beams[beam].ntimesteps * ctx->beams[beam].nchan * ctx->npol;
     }
 
-    int out_buffer_bytes = out_buffer_elements * sizeof(float);    
+    long out_buffer_bytes = out_buffer_elements * sizeof(float);    
                     
     int input_index = 0;
 
@@ -329,8 +314,10 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
           }        
       }
 
-      // Create the fil block for this beam        
-      if (create_fil_block(client, &(ctx->out_filfile_ptr), ctx->nbit/8, ctx->beams[beam].ntimesteps, ctx->beams[beam].nchan, ctx->npol, (float*)buffer, out_buffer_bytes))    
+      // Create the fil block for this beam
+      printf("\n\nnbit: %d ntimesteps: %lu nchan: %lu npol: %d out_buffer_bytes: %lu\n\n", ctx->nbit/8, ctx->beams[beam].ntimesteps, ctx->beams[beam].nchan, ctx->npol, out_buffer_bytes);        
+      if (create_fil_block(client, &(ctx->out_filfile_ptr), ctx->nbit/8, ctx->beams[beam].ntimesteps, 
+                           ctx->beams[beam].nchan, ctx->npol, (float*)buffer, out_buffer_bytes))    
       {
         // Error!
         multilog(log, LOG_ERR, "dada_dbfil_io(): Error Writing into new fil block.\n");
@@ -438,7 +425,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
   {
     // Some sanity checks:
     // Did we hit the end of an obs
-    if (1 == 1)
+    if (ctx->exposure_sec == (ctx->subobs_id - ctx->obs_id))
     {      
       do_close_file = 1;
     }
@@ -537,6 +524,19 @@ int read_dada_header(dada_client_t *client)
     return -1;
   }  
 
+  if (ascii_header_get(client->header, HEADER_SECS_PER_SUBOBS, "%i", &ctx->secs_per_subobs) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_SECS_PER_SUBOBS);
+    return -1;
+  }
+
+  /* seconds per sub observation must be > 0 */
+  if (!(ctx->secs_per_subobs > 0))
+  {
+    multilog(log, LOG_ERR, "dada_dbfits_open(): %s is not greater than 0.\n", HEADER_SECS_PER_SUBOBS);
+    return -1;
+  }
+
   // Process Beams
   if (ctx->beams != 0)
     free(ctx->beams);
@@ -584,7 +584,9 @@ int read_dada_header(dada_client_t *client)
       return -1;
     }  
 
-    ctx->expected_transfer_size = ctx->expected_transfer_size + (ctx->beams[beam_index].ntimesteps * ctx->beams[beam_index].nchan * ctx->npol * (ctx->nbit/8));
+    ctx->expected_transfer_size = ctx->expected_transfer_size + 
+                                  (ctx->beams[beam_index].ntimesteps * ctx->beams[beam_index].nchan * 
+                                   ctx->npol * (ctx->nbit/8));
   }
 
   // Calculate start freq of each fine channel
@@ -602,17 +604,18 @@ int read_dada_header(dada_client_t *client)
   }
 
   // Output what we found in the header
-  multilog(log, LOG_INFO, "Obs Id:                   %lu\n", ctx->obs_id);
-  multilog(log, LOG_INFO, "Subobs Id:                %lu\n", ctx->subobs_id);
-  multilog(log, LOG_INFO, "Command:                  %s\n", ctx->command);  
-  multilog(log, LOG_INFO, "Start time (UTC):         %s\n", ctx->utc_start);  
-  multilog(log, LOG_INFO, "Duration (secs):          %d\n", ctx->exposure_sec);    
-  multilog(log, LOG_INFO, "Bits per real/imag:       %d\n", ctx->nbit);  
-  multilog(log, LOG_INFO, "Polarisations:            %d\n", ctx->npol);
-  multilog(log, LOG_INFO, "Coarse channel no.:       %d\n", ctx->coarse_channel);      
-  multilog(log, LOG_INFO, "Coarse Channel Bandwidth: %d Hz\n", ctx->bandwidth_hz);   
-  multilog(log, LOG_INFO, "Size of subobservation:   %lu bytes\n", ctx->transfer_size); 
-  multilog(log, LOG_INFO, "Beams:                    %d\n", ctx->nbeams);    
+  multilog(log, LOG_INFO, "Obs Id:                     %lu\n", ctx->obs_id);
+  multilog(log, LOG_INFO, "Subobs Id:                  %lu\n", ctx->subobs_id);
+  multilog(log, LOG_INFO, "Command:                    %s\n", ctx->command);  
+  multilog(log, LOG_INFO, "Start time (UTC):           %s\n", ctx->utc_start);  
+  multilog(log, LOG_INFO, "Duration (secs):            %d\n", ctx->exposure_sec);    
+  multilog(log, LOG_INFO, "Bits per real/imag:         %d\n", ctx->nbit);  
+  multilog(log, LOG_INFO, "Polarisations:              %d\n", ctx->npol);
+  multilog(log, LOG_INFO, "Coarse channel no.:         %d\n", ctx->coarse_channel);      
+  multilog(log, LOG_INFO, "Coarse Channel Bandwidth:   %d Hz\n", ctx->bandwidth_hz);   
+  multilog(log, LOG_INFO, "Size of subobservation:     %lu bytes\n", ctx->transfer_size); 
+  multilog(log, LOG_INFO, "Expected Size of 1s block:  %lu bytes\n", ctx->expected_transfer_size); 
+  multilog(log, LOG_INFO, "Beams:                      %d\n", ctx->nbeams);    
 
   for (int beam=0; beam < ctx->nbeams; beam++)
   {
@@ -625,7 +628,6 @@ int read_dada_header(dada_client_t *client)
       // Enable this for debug! If lots of channels it can be big!
       //multilog(log, LOG_INFO, "..Beam %.2d ch %d %f MHz\n", beam+1, ch, ctx->beams[beam].channels[ch]);
     }
-
   }
     
   return EXIT_SUCCESS;

@@ -42,7 +42,6 @@ int CFilFile_WriteHeader(cFilFile *filfile_ptr, const cFilFileHeader* filHeader 
 {      
     CFilFile_WriteKeyword_string(filfile_ptr, "HEADER_START", NULL);
 
-    // awk '{print "   WriteKeyword( \""$2"\" , filHeader."$2" );";}' keys.tmp > keys.txt
     CFilFile_WriteKeyword_int(filfile_ptr, "telescope_id" , filHeader->telescope_id );
     CFilFile_WriteKeyword_int(filfile_ptr, "machine_id" , filHeader->machine_id );
     CFilFile_WriteKeyword_int(filfile_ptr, "data_type" , filHeader->data_type );
@@ -57,28 +56,15 @@ int CFilFile_WriteHeader(cFilFile *filfile_ptr, const cFilFileHeader* filHeader 
     CFilFile_WriteKeyword_double(filfile_ptr, "tstart" , filHeader->tstart );
     CFilFile_WriteKeyword_double(filfile_ptr, "tsamp" , filHeader->tsamp );
     CFilFile_WriteKeyword_int(filfile_ptr, "nbits" , filHeader->nbits );
-    CFilFile_WriteKeyword_string(filfile_ptr, "signed" , filHeader->signed_ );
-    CFilFile_WriteKeyword_int(filfile_ptr, "nsamples" , filHeader->nsamples );
-    CFilFile_WriteKeyword_int(filfile_ptr, "nbeams" , filHeader->nbeams );
-    CFilFile_WriteKeyword_int(filfile_ptr, "ibeam" , filHeader->ibeam );
+    CFilFile_WriteKeyword_int(filfile_ptr, "nsamples" , filHeader->nsamples ); 
     CFilFile_WriteKeyword_double(filfile_ptr, "fch1" , filHeader->fch1 );
     CFilFile_WriteKeyword_double(filfile_ptr, "foff" , filHeader->foff );
-    
-    CFilFile_WriteKeyword_string(filfile_ptr, "FREQUENCY_START", NULL);
-
-    for (int ch=0; ch<filHeader->nchans; ch++)
-    {
-        CFilFile_WriteKeyword_double(filfile_ptr, "fchannel" , filHeader->fchannel[ch] );
-    }
-
-    CFilFile_WriteKeyword_string(filfile_ptr, "FREQUENCY_END", NULL);
-
     CFilFile_WriteKeyword_int(filfile_ptr, "nchans" , filHeader->nchans );
     CFilFile_WriteKeyword_int(filfile_ptr, "nifs" , filHeader->nifs );
     CFilFile_WriteKeyword_double(filfile_ptr, "refdm" , filHeader->refdm );
     CFilFile_WriteKeyword_double(filfile_ptr, "period" , filHeader->period );
-    CFilFile_WriteKeyword_longlong(filfile_ptr, "npuls" , filHeader->npuls );
-    CFilFile_WriteKeyword_int(filfile_ptr, "nbins" , filHeader->nbins );
+    CFilFile_WriteKeyword_int(filfile_ptr, "nbeams" , filHeader->nbeams );
+    CFilFile_WriteKeyword_int(filfile_ptr, "ibeam" , filHeader->ibeam );
         
     CFilFile_WriteKeyword_string(filfile_ptr, "HEADER_END", NULL);
 
@@ -144,7 +130,6 @@ int CFilFile_WriteKeyword_string(cFilFile *filfile_ptr, const char* keyname, con
 int CFilFile_WriteData(cFilFile *filfile_ptr, float* data_float, int n_floats )
 {
     int ret = fwrite( data_float, sizeof(float), n_floats, filfile_ptr->m_File );
-
     return ret;
 }
 
@@ -167,18 +152,14 @@ void CFilFileHeader_Constructor(cFilFileHeader* filefileheader_ptr)
     filefileheader_ptr->tstart = 0.00;
     filefileheader_ptr->tsamp = 0.00;
     filefileheader_ptr->nbits = 4;
-    filefileheader_ptr->signed_[0] = 1;        // signed is a restricted keyword in C/C++ -> added _
     filefileheader_ptr->nsamples = 0;
-    filefileheader_ptr->nbeams = 1;
-    filefileheader_ptr->ibeam = 0;
     filefileheader_ptr->fch1 = 0,
     filefileheader_ptr->foff = -0.001;
-    filefileheader_ptr->fchannel = NULL;
     filefileheader_ptr->nchans = 0;
     filefileheader_ptr->nifs = 0;
     filefileheader_ptr->refdm = 0;
     filefileheader_ptr->period = 0;
-    filefileheader_ptr->npuls = 0;
-    filefileheader_ptr->nbins = 0;
+    filefileheader_ptr->nbeams = 1;
+    filefileheader_ptr->ibeam = 0;
 }
 

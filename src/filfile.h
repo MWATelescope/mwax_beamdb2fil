@@ -21,19 +21,15 @@ typedef struct CFilFileHeader
    double tstart;
    double tsamp;
    int nbits;
-   char signed_[1]; // TODO verify this one -> signed is a restricted keyword in C/C++ -> added _. GJS- was char, made it char[1]
    long nsamples;
-   int nbeams;
-   int ibeam;
    double fch1;
    double foff;
-   double* fchannel;
    long nchans;
    int nifs;
    double refdm;
    double period;
-   long long npuls; // ??? number of pulses in the .fil file ???
-   int nbins;
+   int nbeams;
+   int ibeam;
 } cFilFileHeader;
 
 typedef struct CFilFile 

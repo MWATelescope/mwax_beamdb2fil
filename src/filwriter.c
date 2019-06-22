@@ -62,31 +62,16 @@ int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr, metafits_s *met
   filheader.tstart = metafits->mjd;                                         // Timestamp MJD of first sample
   filheader.tsamp = 1.0f / ctx->beams[0].ntimesteps;                        // time interval between samples (seconds)
   filheader.nbits = ctx->nbit;                                              // bits per time sample  
-  filheader.foff = ctx->bandwidth_hz / 1000.0f / ctx->beams[0].nchan;       // filterbank channel bandwidth (MHz)  
-  filheader.nchans = ctx->beams[0].nchan;
-
-  // This is an array of channels (in MHz)
-  if (filheader.fchannel != NULL)  
-    free(filheader.fchannel);
-  filheader.fchannel = calloc(filheader.nchans, sizeof(double));
-  
-  for (int ch=0; ch<filheader.nchans; ch++)
-  {
-    filheader.fchannel[ch] = ctx->beams[0].channels[ch];
-  }
-
-  filheader.fch1 = filheader.fchannel[0];                                   // Centre freq (MHz) of first channel
+  filheader.nsamples = ctx->beams[0].ntimesteps * ctx->exposure_sec;        // number of time samples in the data file (rarely used)
+  filheader.fch1 = ctx->beams[0].channels[0];                               // Centre freq (MHz) of first channel  
+  filheader.foff = (double)ctx->bandwidth_hz / 1000000.0f / (double)ctx->beams[0].nchan;       // filterbank channel bandwidth (MHz)  
+  filheader.nchans = ctx->beams[0].nchan;  
   filheader.nifs = ctx->npol;                                               // Number of IF channels(polarisations I think)
   filheader.refdm = 0;                                                      // reference dispersion measure (cm^−3 pc)
-  filheader.period = 0;                                                     // folding period (s)
-  filheader.npuls = 0;        
-  filheader.nbins = ctx->beams[0].ntimesteps;
-  
-  strncpy(filheader.signed_, " ", 1);
-  filheader.nsamples = ctx->beams[0].ntimesteps * ctx->beams[0].nchan * ctx->npol * ctx->exposure_sec; // number of time samples in the data file (rarely used)
+  filheader.period = 0.253065;                                                     // folding period (s)
   filheader.nbeams = ctx->nbeams;
   filheader.ibeam = 0;
-
+  
   // Write the header
   CFilFile_WriteHeader(out_filfile_ptr, &filheader);    
 
