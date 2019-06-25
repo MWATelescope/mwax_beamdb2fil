@@ -23,10 +23,17 @@
 #define IP_AS_STRING_LEN        15    // xxx.xxx.xxx.xxx   
 
 typedef struct beam_s {
+    // FIL info    
+    char fil_filename[PATH_MAX];    
+    cFilFile out_filfile_ptr;
+    
+    // Beam settings
     long time_integration;            // i.e. time-scrunch factor, e.g. 10 means sum 10 powers samples per output
     long ntimesteps;                  // how many timesteps per second
     long nchan;                       // number of channels
     double* channels;                 // array of fine channel centres (MHz)
+
+    // Beam Statistics
     double* power_freq;               // Stats by freq
     double* power_time;               // Stats by time
 } beam_s;
@@ -55,7 +62,8 @@ typedef struct dada_db_s {
 
     // Common
     char hostname[HOST_NAME_LEN+1];
-    
+    char* destination_dir;    
+
     // Stats
     char* stats_dir;   
 
@@ -64,18 +72,13 @@ typedef struct dada_db_s {
     char metafits_filename[PATH_MAX];
     fitsfile* in_metafits_ptr;
     metafits_s* metafits_info;
-
-    // FIL info
-    char* destination_dir;    
-    char fil_filename[PATH_MAX];
-    int fil_file_number;
-    cFilFile out_filfile_ptr;
     
     // Observation info
     long obs_id;
     long subobs_id;
     char command[MWAX_COMMAND_LEN];
     char utc_start[UTC_START_LEN];
+    int obs_offset;
     int coarse_channel;
     int nbit;
     int npol;

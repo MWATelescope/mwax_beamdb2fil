@@ -24,20 +24,23 @@
  *  @param[in] filename Full path and name of the fil file to create.
  *  @returns EXIT_SUCCESS on success, or -1 if there was an error.
  */
-int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr, metafits_s *metafits)
+int create_fil(dada_client_t *client, int beam_index, cFilFile *out_filfile_ptr, metafits_s *metafits)
 {
   assert(client != 0);  
 
   assert(client->log != 0);
   multilog_t *log = (multilog_t *) client->log;
   dada_db_s* ctx = (dada_db_s*) client->context;
-  multilog(log, LOG_INFO, "create_fil(): Creating new fil file %s...\n", ctx->fil_filename);  
+
+  beam_s beam = ctx->beams[beam_index];
+
+  multilog(log, LOG_INFO, "create_fil(): Creating new fil file for beam %d: %s...\n", beam_index, beam.fil_filename);  
   
   // Create a new blank fil file  
-  if (CFilFile_Open(out_filfile_ptr, ctx->fil_filename) != EXIT_SUCCESS)
+  if (CFilFile_Open(out_filfile_ptr, beam.fil_filename) != EXIT_SUCCESS)
   {
     char error_text[30]="";
-    multilog(log, LOG_ERR, "create_fil(): Error creating fil file: %s. Error: %s\n", ctx->fil_filename, error_text);
+    multilog(log, LOG_ERR, "create_fil(): Error creating fil file: %s. Error: %s\n", beam.fil_filename, error_text);
     return -1;
   }  
 
@@ -51,25 +54,25 @@ int create_fil(dada_client_t *client, cFilFile *out_filfile_ptr, metafits_s *met
   filheader.telescope_id = 0;                                               // FAKE
   filheader.machine_id = 0;                                                 // FAKE
   filheader.data_type = 1;                                                  // 1 - filterbank; 2 - timeseries
-  strncpy(filheader.rawdatafile, ctx->fil_filename, 4096);
+  strncpy(filheader.rawdatafile, beam.fil_filename, 4096);
   strncpy(filheader.source_name, metafits->filename, 4096);  
   filheader.barycentric = 0;
   filheader.pulsarcentric = 0;  
-  filheader.az_start = metafits->azimuth;                                   // Pointing azimuth (degrees)
-  filheader.za_start = 90 - metafits->altitude;                             // Pointing zenith angle (degrees)
-  filheader.src_raj = metafits->ra;                                         // RA (J2000) of source
-  filheader.src_dej = metafits->dec;                                        // DEC (J2000) of source
-  filheader.tstart = metafits->mjd;                                         // Timestamp MJD of first sample
-  filheader.tsamp = 1.0f / ctx->beams[0].ntimesteps;                        // time interval between samples (seconds)
-  filheader.nbits = ctx->nbit;                                              // bits per time sample  
-  filheader.nsamples = ctx->beams[0].ntimesteps * ctx->exposure_sec;        // number of time samples in the data file (rarely used)
-  filheader.fch1 = ctx->beams[0].channels[0];                               // Centre freq (MHz) of first channel  
-  filheader.foff = (double)ctx->bandwidth_hz / 1000000.0f / (double)ctx->beams[0].nchan;       // filterbank channel bandwidth (MHz)  
-  filheader.nchans = ctx->beams[0].nchan;  
-  filheader.nifs = ctx->npol;                                               // Number of IF channels(polarisations I think)
-  filheader.refdm = 0;                                                      // reference dispersion measure (cm^−3 pc)
-  filheader.period = 0.253065;                                                     // folding period (s)
-  filheader.nbeams = ctx->nbeams;
+  filheader.az_start = metafits->azimuth;                                       // Pointing azimuth (degrees)
+  filheader.za_start = 90 - metafits->altitude;                                 // Pointing zenith angle (degrees)
+  filheader.src_raj = metafits->ra;                                             // RA (J2000) of source
+  filheader.src_dej = metafits->dec;                                            // DEC (J2000) of source
+  filheader.tstart = metafits->mjd;                                             // Timestamp MJD of first sample
+  filheader.tsamp = 1.0f / beam.ntimesteps;                                     // time interval between samples (seconds)
+  filheader.nbits = ctx->nbit;                                                  // bits per time sample  
+  filheader.nsamples = beam.ntimesteps * ctx->exposure_sec;                     // number of time samples in the data file (rarely used)
+  filheader.fch1 = beam.channels[0];                                            // Centre freq (MHz) of first channel  
+  filheader.foff = (double)ctx->bandwidth_hz / 1000000.0f / (double)beam.nchan; // filterbank channel bandwidth (MHz)  
+  filheader.nchans = beam.nchan;  
+  filheader.nifs = ctx->npol;                                                   // Number of IF channels(polarisations I think)
+  filheader.refdm = 0;                                                          // reference dispersion measure (cm^−3 pc)
+  filheader.period = 0.253065;                                                  // folding period (s)
+  filheader.nbeams = 1;
   filheader.ibeam = 0;
   
   // Write the header
@@ -157,7 +160,7 @@ int create_fil_block(dada_client_t *client, cFilFile *out_filfile_ptr, int bytes
   {
     // Error
     char error_text[30]="";      
-    multilog(log, LOG_ERR, "create_fil_block(): Error writing fil file block. Number of bytes written %d != %d (samples * bytes per sample) Error: %s\n", bytes, out_check_bytes, error_text);
+    multilog(log, LOG_ERR, "create_fil_block(): Error writing fil file block. Number of bytes written%" PRIu64 " != %" PRIu64 " (samples * bytes per sample) Error: %s\n", bytes, out_check_bytes, error_text);
     return EXIT_FAILURE;
   }
 

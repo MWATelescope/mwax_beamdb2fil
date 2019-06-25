@@ -20,7 +20,8 @@
 /**
  * 
  *  @brief This is called at the begininning of each new 8 second sub-observation.
- *         We need check if we are in a new fils file or continuing the existing one.
+ *         The PSRDADA header will tell us how many beams we have. Each beam is
+ *         written to a seperate fil file, so this code sets that up.
  *  @param[in] client A pointer to the dada_client_t object.
  *  @returns EXIT_SUCCESS on success, or -1 if there was an error. 
  */
@@ -108,7 +109,7 @@ int dada_dbfil_open(dada_client_t* client)
   if (ctx->obs_id != this_obs_id)
   {
     // We need a new fil file
-    if (&(ctx->out_filfile_ptr) != NULL)
+    if (&(ctx->beams) != NULL)
     {
       multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Closing %lu, Starting %lu...\n", HEADER_OBS_ID, ctx->obs_id, this_obs_id);
     }
@@ -117,16 +118,21 @@ int dada_dbfil_open(dada_client_t* client)
       multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Starting %lu...\n", HEADER_OBS_ID, this_obs_id);
     }      
 
-    // Close existing fits file (if we have one)    
-    if (&(ctx->out_filfile_ptr) != NULL)
+    // Close existing fil files (if we have any)    
+    for (int beam=0; beam < ctx->nbeams; beam++)
     {
-      if (close_fil(client, &(ctx->out_filfile_ptr))) 
+      if (&(ctx->beams[beam].out_filfile_ptr) != NULL)
       {
-        multilog(log, LOG_ERR,"dada_dbfil_open(): Error closing fits file.\n");
-        return -1;
+        multilog(log, LOG_INFO, "dada_dbfil_open(): Closing %s...\n", ctx->beams[beam].fil_filename);
+
+        if (close_fil(client, &(ctx->beams[beam].out_filfile_ptr))) 
+        {
+          multilog(log, LOG_ERR,"dada_dbfil_open(): Error closing fils file.\n");
+          return -1;
+        }
       }
     }
-    
+
     //
     // Do this for new observations only
     //
@@ -136,10 +142,7 @@ int dada_dbfil_open(dada_client_t* client)
     ctx->bytes_read = 0;
     ctx->bytes_written = 0;
     ctx->curr_block = 0;
-    ctx->block_number= 0;
-
-    // fil info  
-    strncpy(ctx->fil_filename, "", PATH_MAX);      
+    ctx->block_number= 0;    
 
     // Set the obsid & sub obsid 
     ctx->obs_id = this_obs_id;
@@ -209,24 +212,25 @@ int dada_dbfil_open(dada_client_t* client)
     {
       multilog(log, LOG_ERR, "dada_dbfil_open(): Ring buffer block size (%lu bytes) is less than the calculated size of an integration from header parameters (%lu bytes).\n", ctx->block_size, ctx->expected_transfer_size);
       return -1;
-    }
-    
-    // Reset the filenumber
-    ctx->fil_file_number = 0;      
+    }        
 
-    /* Create fil file for output                                */
-    /* Work out the name of the file using the UTC START          */
-    /* Convert the UTC_START from the header format: YYYY-MM-DD-hh:mm:ss into YYYYMMDDhhmmss  */        
-    int year, month, day, hour, minute, second;
-    sscanf(ctx->utc_start, "%d-%d-%d-%d:%d:%d", &year, &month, &day, &hour, &minute, &second);    
-      
-    /* Make a new filename- oooooooooo_YYYYMMDDhhmmss_chCCC_FFF.fil */
-    snprintf(ctx->fil_filename, PATH_MAX, "%s/%ld_%04d%02d%02d%02d%02d%02d_ch%02d_%03d.fil", ctx->destination_dir, ctx->obs_id, year, month, day, hour, minute, second, ctx->coarse_channel, ctx->fil_file_number);
-    
-    if (create_fil(client, &(ctx->out_filfile_ptr), ctx->metafits_info)) 
+    /* Create fil files for each beam output                      */
+    for (int beam=0; beam < ctx->nbeams; beam++)
     {
-      multilog(log, LOG_ERR,"dada_dbfil_open(): Error creating new fil file.\n");
-      return -1;
+      /* Work out the name of the file using the UTC START          */
+      /* Convert the UTC_START from the header format: YYYY-MM-DD-hh:mm:ss into YYYYMMDDhhmmss  */        
+      int year, month, day, hour, minute, second;
+      sscanf(ctx->utc_start, "%d-%d-%d-%d:%d:%d", &year, &month, &day, &hour, &minute, &second);    
+        
+      /* Make a new filename- oooooooooo_YYYYMMDDhhmmss_chCCC_FFF.fil */
+      snprintf(ctx->beams[beam].fil_filename, PATH_MAX, "%s/%ld_%04d%02d%02d%02d%02d%02d_ch%02d_%02d.fil", ctx->destination_dir, 
+               ctx->obs_id, year, month, day, hour, minute, second, ctx->coarse_channel, beam + 1);
+      
+      if (create_fil(client, beam, &(ctx->beams[beam].out_filfile_ptr), ctx->metafits_info)) 
+      {
+        multilog(log, LOG_ERR,"dada_dbfil_open(): Error creating new fil file for beam %d.\n", beam + 1);
+        return -1;
+      }
     }
   }
   else
@@ -263,113 +267,118 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     uint64_t wrote    = 0;
     
     multilog (log, LOG_DEBUG, "dada_dbfil_io(): Processing block %d.\n", ctx->block_number);
-      
-    multilog(log, LOG_INFO, "dada_dbfil_io(): Writing %d of %d bytes into new fil block; Marker = %d.\n", ctx->expected_transfer_size, bytes, ctx->obs_marker_number);     
+    
+    // Determine which beam this is. For example with 3 beams:
+    // Block 0 == 1st beam timestep 1
+    // Block 1 == 2nd beam timestep 1
+    // Block 2 == 3rd beam timestep 1
+    // Block 3 == 1st beam timestep 2
+    // Block 4 == 2nd beam timestep 2
+    // Block 5 == 3rd beam timestep 2
+    int beam = ctx->block_number % ctx->nbeams;
+
+    multilog(log, LOG_INFO, "dada_dbfil_io(): Writing %d of %d bytes into new fil block for beam %d; Marker = %d.\n", ctx->expected_transfer_size, bytes, beam, ctx->obs_marker_number);     
     
     // Read ring buffer block and write data out    
     float* in_buffer = (float*)buffer;
     long out_buffer_elements = 0;
-
-    for (int beam=0; beam < ctx->nbeams; beam++)
-    {
-      out_buffer_elements += ctx->beams[beam].ntimesteps * ctx->beams[beam].nchan * ctx->npol;
-    }
-
+    
+    out_buffer_elements = ctx->beams[beam].ntimesteps * ctx->beams[beam].nchan * ctx->npol;
+    
     long out_buffer_bytes = out_buffer_elements * sizeof(float);    
                     
-    int input_index = 0;
+    int input_index = 0;    
 
-    // Loop through each beam
-    for (int beam=0; beam < ctx->nbeams; beam++)
-    {      
-      ctx->beams[beam].power_freq = calloc(ctx->beams[beam].nchan, sizeof(double));
-      ctx->beams[beam].power_time = calloc(ctx->beams[beam].ntimesteps, sizeof(double));
+    ctx->beams[beam].power_freq = calloc(ctx->beams[beam].nchan, sizeof(double));
+    ctx->beams[beam].power_time = calloc(ctx->beams[beam].ntimesteps, sizeof(double));
 
-      // For each beam loop through all of the timesteps
-      for (long t=0;t<ctx->beams[beam].ntimesteps;t++)
-      {
-          // Iterate through all of the channels in the timestep
-          for (int ch=0; ch<ctx->beams[beam].nchan; ch++)
-          {
-              // Each channel can have polarisations
-              for (int pol=0; pol<ctx->npol; pol++)
-              {
-                //int input_index = (t * ctx->nfine_chan * ctx->npol) + (ch * ctx->npol) + pol;
-                
-                // Update stats but only if we asked for it
-                if (ctx->stats_dir != NULL)
-                {
-                  ctx->beams[beam].power_freq[ch] += (double)in_buffer[input_index];              
-                  ctx->beams[beam].power_time[t] += (double)in_buffer[input_index];              
-                }
-
-                /* uncomment this for debug! 
-                if (t<=0 && ctx->block_number==0)
-                  printf("t=%d; ch=%d; pol=%d; in_index=%d; out_index=%d value=%f;\n", t, ch, pol, input_index, output_index, in_buffer[input_index]);
-                */
-
-               // increment the input_data index
-               input_index = input_index + 1;
-              }            
-          }        
-      }
-
-      // Create the fil block for this beam
-      printf("\n\nnbit: %d ntimesteps: %lu nchan: %lu npol: %d out_buffer_bytes: %lu\n\n", ctx->nbit/8, ctx->beams[beam].ntimesteps, ctx->beams[beam].nchan, ctx->npol, out_buffer_bytes);        
-      if (create_fil_block(client, &(ctx->out_filfile_ptr), ctx->nbit/8, ctx->beams[beam].ntimesteps, 
-                           ctx->beams[beam].nchan, ctx->npol, (float*)buffer, out_buffer_bytes))    
-      {
-        // Error!
-        multilog(log, LOG_ERR, "dada_dbfil_io(): Error Writing into new fil block.\n");
-        return -1;
-      }
-      else
-      {   
-        wrote = out_buffer_bytes;
-        written += wrote;
-        ctx->obs_marker_number += 1; // Increment the marker number
-
-        ctx->block_number += 1;    
-        ctx->bytes_written += written;
-
-        if (ctx->stats_dir != NULL)
+    // For this beam loop through all of the timesteps
+    for (long t=0;t<ctx->beams[beam].ntimesteps;t++)
+    {
+        // Iterate through all of the channels in the timestep
+        for (int ch=0; ch<ctx->beams[beam].nchan; ch++)
         {
-          /* Make a new filename for the freq stats */
-          char output_spectrum_filename[PATH_MAX];
-          snprintf(output_spectrum_filename, PATH_MAX, "%s/%ld_ch%02d_%02d_%03d_spec.txt", 
-                  ctx->stats_dir, ctx->obs_id, ctx->coarse_channel, beam + 1, ctx->block_number);
-
-          FILE* out_fs = fopen(output_spectrum_filename, "w");
-          for(int ch=0;ch<ctx->beams[beam].nchan;ch++)
-          {
-              ctx->beams[beam].power_freq[ch] = ctx->beams[beam].power_freq[ch] / (double)ctx->beams[beam].ntimesteps;
+            // Each channel can have polarisations
+            for (int pol=0; pol<ctx->npol; pol++)
+            {
+              //int input_index = (t * ctx->nfine_chan * ctx->npol) + (ch * ctx->npol) + pol;
               
-              fprintf(out_fs,"%d %f\n",ch, ctx->beams[beam].power_freq[ch]);          
-          }
-          fclose(out_fs);
+              // Update stats but only if we asked for it
+              if (ctx->stats_dir != NULL)
+              {
+                ctx->beams[beam].power_freq[ch] += (double)in_buffer[input_index];              
+                ctx->beams[beam].power_time[t] += (double)in_buffer[input_index];              
+              }
 
-          /* Make a new filename for the time stats */
-          char output_time_filename[PATH_MAX];
-          snprintf(output_time_filename, PATH_MAX, "%s/%ld_ch%02d_%02d_%03d_time.txt", 
-                  ctx->stats_dir, ctx->obs_id, ctx->coarse_channel, beam + 1, ctx->block_number);
+              /* uncomment this for debug! 
+              if (t<=0 && ctx->block_number==0)
+                printf("t=%d; ch=%d; pol=%d; in_index=%d; out_index=%d value=%f;\n", t, ch, pol, input_index, output_index, in_buffer[input_index]);
+              */
 
-          FILE* out_ft = fopen(output_time_filename, "w");
-          for(long t=0;t<ctx->beams[beam].ntimesteps;t++)
-          {
-              ctx->beams[beam].power_time[t] = ctx->beams[beam].power_time[t] / (double)ctx->beams[beam].nchan;
-              
-              fprintf(out_ft,"%ld %f\n",t, ctx->beams[beam].power_time[t]);          
-          }
-          fclose(out_ft);
-
-          multilog(log, LOG_INFO, "dada_dbfil_io(): wrote out spectrum (%s) and time (%s) statistics.", output_spectrum_filename, output_time_filename);
-        }
-      }                
-    
-      // Cleanup    
-      free(ctx->beams[beam].power_freq);
-      free(ctx->beams[beam].power_time);
+              // increment the input_data index
+              input_index = input_index + 1;
+            }            
+        }        
     }
+
+    // Create the fil block for this beam
+    //printf("\n\nnbit: %d ntimesteps: %lu nchan: %lu npol: %d out_buffer_bytes: %lu\n\n", ctx->nbit/8, ctx->beams[beam].ntimesteps, ctx->beams[beam].nchan, ctx->npol, out_buffer_bytes);        
+    if (create_fil_block(client, &(ctx->beams[beam].out_filfile_ptr), ctx->nbit/8, ctx->beams[beam].ntimesteps, 
+                          ctx->beams[beam].nchan, ctx->npol, (float*)buffer, out_buffer_bytes))    
+    {
+      // Error!
+      multilog(log, LOG_ERR, "dada_dbfil_io(): Error Writing into new fil block (beam %d).\n", beam + 1);
+      return -1;
+    }
+    else
+    {   
+      wrote = out_buffer_bytes;
+      written += wrote;
+      
+      // If this beam is the last beam then increment the marker number
+      if (beam == ctx->nbeams - 1)
+        ctx->obs_marker_number += 1; 
+
+      ctx->block_number += 1;    
+      ctx->bytes_written += written;
+
+      if (ctx->stats_dir != NULL)
+      {
+        /* Make a new filename for the freq stats */
+        char output_spectrum_filename[PATH_MAX];
+        snprintf(output_spectrum_filename, PATH_MAX, "%s/%ld_ch%02d_%02d_%03d_spec.txt", 
+                ctx->stats_dir, ctx->obs_id, ctx->coarse_channel, beam + 1, ctx->obs_marker_number);
+
+        FILE* out_fs = fopen(output_spectrum_filename, "w");
+        for(int ch=0;ch<ctx->beams[beam].nchan;ch++)
+        {
+            ctx->beams[beam].power_freq[ch] = ctx->beams[beam].power_freq[ch] / (double)ctx->beams[beam].ntimesteps;
+            
+            fprintf(out_fs,"%d %f\n",ch, ctx->beams[beam].power_freq[ch]);          
+        }
+        fclose(out_fs);
+
+        /* Make a new filename for the time stats */
+        char output_time_filename[PATH_MAX];
+        snprintf(output_time_filename, PATH_MAX, "%s/%ld_ch%02d_%02d_%03d_time.txt", 
+                ctx->stats_dir, ctx->obs_id, ctx->coarse_channel, beam + 1, ctx->obs_marker_number);
+
+        FILE* out_ft = fopen(output_time_filename, "w");
+        for(long t=0;t<ctx->beams[beam].ntimesteps;t++)
+        {
+            ctx->beams[beam].power_time[t] = ctx->beams[beam].power_time[t] / (double)ctx->beams[beam].nchan;
+            
+            fprintf(out_ft,"%ld %f\n",t, ctx->beams[beam].power_time[t]);          
+        }
+        fclose(out_ft);
+
+        multilog(log, LOG_INFO, "dada_dbfil_io(): wrote out spectrum (%s) and time (%s) statistics.", output_spectrum_filename, output_time_filename);
+      }
+    }                
+  
+    // Cleanup    
+    free(ctx->beams[beam].power_freq);
+    free(ctx->beams[beam].power_time);
 
     return bytes;
   }  
@@ -425,9 +434,15 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
   {
     // Some sanity checks:
     // Did we hit the end of an obs
-    if (ctx->exposure_sec == (ctx->subobs_id - ctx->obs_id))
-    {      
+    if (ctx->exposure_sec == ctx->obs_offset + ctx->secs_per_subobs)
+    {            
       do_close_file = 1;
+    }    
+    else
+    {
+      // We hit the end of the ring buffer, but we shouldn't have. Put out a warning
+      multilog(log, LOG_ERR, "dada_dbfil_close(): We hit the end of the ring buffer, but we shouldn't have! EXPOSURE_SEC=%d but this block OBS_OFFSET=%d and ends at %d sec.\n", ctx->exposure_sec,ctx->obs_offset, ctx->obs_offset + ctx->secs_per_subobs);
+      exit(-1);
     }
   }
   else if (strcmp(ctx->command, MWAX_COMMAND_QUIT) == 0 || strcmp(ctx->command, MWAX_COMMAND_IDLE) == 0)
@@ -439,15 +454,21 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
   {
     // Observation ends NOW! It got cut short, or we naturally are at the end of the observation 
     // Close existing fits file (if we have one)    
-    if (&(ctx->out_filfile_ptr) != NULL)
+    // Close existing fil files (if we have any)    
+    for (int beam=0; beam < ctx->nbeams; beam++)
     {
-      if (close_fil(client, &ctx->out_filfile_ptr)) 
+      if (&(ctx->beams[beam].out_filfile_ptr) != NULL)
       {
-        multilog(log, LOG_ERR,"dada_dbfil_close(): Error closing fil file.\n");
-        return -1;
+        multilog(log, LOG_INFO, "dada_dbfil_close(): Closing %s...\n", ctx->beams[beam].fil_filename);
+
+        if (close_fil(client, &(ctx->beams[beam].out_filfile_ptr))) 
+        {
+          multilog(log, LOG_ERR,"dada_dbfil_close(): Error closing fil file.\n");
+          return -1;
+        }
       }
     }
-  }   
+  }     
 
   multilog (log, LOG_INFO, "dada_dbfil_close(): completed\n");
 
@@ -479,6 +500,12 @@ int read_dada_header(dada_client_t *client)
   if (ascii_header_get(client->header, HEADER_UTC_START, "%s", &ctx->utc_start) == -1)
   {
     multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_UTC_START);
+    return -1;
+  }
+
+  if (ascii_header_get(client->header, HEADER_OBS_OFFSET, "%i", &ctx->obs_offset) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_OBS_OFFSET);
     return -1;
   }
 
@@ -561,6 +588,51 @@ int read_dada_header(dada_client_t *client)
       strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_01_TIME_INTEG, beam_inttime_string_len);
       strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_01_CHANNELS, beam_finechan_string_len);
     }
+    else if (beam == 2)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_02_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_02_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 3)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_03_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_03_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 4)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_04_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_04_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 5)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_05_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_05_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 6)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_06_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_06_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 7)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_07_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_07_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 8)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_08_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_08_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 9)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_09_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_09_CHANNELS, beam_finechan_string_len);
+    }
+    else if (beam == 10)
+    {
+      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_10_TIME_INTEG, beam_inttime_string_len);
+      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_10_CHANNELS, beam_finechan_string_len);
+    }
     else
     {
       multilog(log, LOG_ERR, "read_dada_header(): %d or more beams are not supported.\n", beam);
@@ -591,21 +663,27 @@ int read_dada_header(dada_client_t *client)
 
   // Calculate start freq of each fine channel
   long start_chan_hz = ctx->coarse_channel * ctx->bandwidth_hz;
-  int fine_chan_width_hz = ctx->bandwidth_hz / ctx->beams[0].nchan;
-
-  // allocate space for the fine channel frequencies
-  if (ctx->beams[0].channels != 0)
-    free(ctx->beams[0].channels);
-  ctx->beams[0].channels = calloc(ctx->beams[0].nchan, sizeof(double));
-
-  for (int ch=0; ch < ctx->beams[0].nchan; ch++)
+  
+  // allocate space for the fine channel frequencies for each beam
+  for (int beam=0; beam < ctx->nbeams; beam++)
   {
-    ctx->beams[0].channels[ch] = (start_chan_hz + ((ch+0.5) * fine_chan_width_hz)) / 1000000.0f;
+    if (ctx->beams[beam].channels != 0)
+      free(ctx->beams[beam].channels);
+
+    ctx->beams[beam].channels = calloc(ctx->beams[beam].nchan, sizeof(double));
+
+    int fine_chan_width_hz = ctx->bandwidth_hz / ctx->beams[beam].nchan;
+    
+    for (int ch=0; ch < ctx->beams[beam].nchan; ch++)
+    {    
+      ctx->beams[beam].channels[ch] = (start_chan_hz + ((ch+0.5) * fine_chan_width_hz)) / 1000000.0f;
+    }
   }
 
   // Output what we found in the header
   multilog(log, LOG_INFO, "Obs Id:                     %lu\n", ctx->obs_id);
   multilog(log, LOG_INFO, "Subobs Id:                  %lu\n", ctx->subobs_id);
+  multilog(log, LOG_INFO, "Offset:                     %d sec\n", ctx->obs_offset);
   multilog(log, LOG_INFO, "Command:                    %s\n", ctx->command);  
   multilog(log, LOG_INFO, "Start time (UTC):           %s\n", ctx->utc_start);  
   multilog(log, LOG_INFO, "Duration (secs):            %d\n", ctx->exposure_sec);    
