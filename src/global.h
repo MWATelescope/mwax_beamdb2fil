@@ -88,6 +88,9 @@ typedef struct dada_db_s {
     uint64_t transfer_size;
     int secs_per_subobs;
 
+    char multicast_ip[IP_AS_STRING_LEN + 1];
+    int multicast_port;
+
     beam_s *beams;
 
     // Not from header- calculated values

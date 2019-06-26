@@ -557,6 +557,18 @@ int read_dada_header(dada_client_t *client)
     return -1;
   }
 
+  if (ascii_header_get(client->header, HEADER_MC_IP, "%s", &ctx->multicast_ip) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_BANDWIDTH_HZ);
+    return -1;
+  }  
+
+  if (ascii_header_get(client->header, HEADER_MC_PORT, "%i", &ctx->multicast_port) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_BANDWIDTH_HZ);
+    return -1;
+  }    
+
   /* seconds per sub observation must be > 0 */
   if (!(ctx->secs_per_subobs > 0))
   {
@@ -693,8 +705,8 @@ int read_dada_header(dada_client_t *client)
   multilog(log, LOG_INFO, "Coarse Channel Bandwidth:   %d Hz\n", ctx->bandwidth_hz);   
   multilog(log, LOG_INFO, "Size of subobservation:     %lu bytes\n", ctx->transfer_size); 
   multilog(log, LOG_INFO, "Expected Size of 1s block:  %lu bytes\n", ctx->expected_transfer_size); 
-  multilog(log, LOG_INFO, "Beams:                      %d\n", ctx->nbeams);    
-
+  multilog(log, LOG_INFO, "Beams:                      %d\n", ctx->nbeams);  
+  
   for (int beam=0; beam < ctx->nbeams; beam++)
   {
     multilog(log, LOG_INFO, "..Beam %.2d time int (tscrunch): %ld\n", beam+1, ctx->beams[beam].time_integration);
@@ -707,6 +719,9 @@ int read_dada_header(dada_client_t *client)
       //multilog(log, LOG_INFO, "..Beam %.2d ch %d %f MHz\n", beam+1, ch, ctx->beams[beam].channels[ch]);
     }
   }
+
+  multilog(log, LOG_INFO, "Multicast IP:               %s\n", ctx->multicast_ip);    
+  multilog(log, LOG_INFO, "Multicast Port:             %d\n", ctx->multicast_port);    
     
   return EXIT_SUCCESS;
 }
