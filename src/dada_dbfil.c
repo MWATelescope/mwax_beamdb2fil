@@ -208,11 +208,12 @@ int dada_dbfil_open(dada_client_t* client)
     }
 
     // Also confirm that the integration size can fit into the ringbuffer size
+    /*
     if (ctx->expected_transfer_size > ctx->block_size)
     {
       multilog(log, LOG_ERR, "dada_dbfil_open(): Ring buffer block size (%lu bytes) is less than the calculated size of an integration from header parameters (%lu bytes).\n", ctx->block_size, ctx->expected_transfer_size);
       return -1;
-    }        
+    } */       
 
     /* Create fil files for each beam output                      */
     for (int beam=0; beam < ctx->nbeams; beam++)
@@ -296,13 +297,11 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     for (long t=0;t<ctx->beams[beam].ntimesteps;t++)
     {
         // Iterate through all of the channels in the timestep
-        for (int ch=0; ch<ctx->beams[beam].nchan; ch++)
-        {
+        for (long ch=0; ch<ctx->beams[beam].nchan; ch++)
+        {                                        
             // Each channel can have polarisations
             for (int pol=0; pol<ctx->npol; pol++)
-            {
-              //int input_index = (t * ctx->nfine_chan * ctx->npol) + (ch * ctx->npol) + pol;
-              
+            {              
               // Update stats but only if we asked for it
               if (ctx->stats_dir != NULL)
               {
@@ -655,18 +654,15 @@ int read_dada_header(dada_client_t *client)
     {
       multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", beam_inttime_string);
       return -1;
-    }  
-
-    // Now we can calculate ntimesteps for this beam
-    // unchannelised samples/sec divided by time_integration
-    // e.g. time_integration of 1280 will yield 1280000 / 1280 == 1000 timesteps per sec
-    ctx->beams[beam_index].ntimesteps = (long)ctx->bandwidth_hz / ctx->beams[beam_index].time_integration;    
-
+    }      
+    
     if (ascii_header_get(client->header, beam_finechan_string, "%ld", &ctx->beams[beam_index].nchan) == -1)
     {
       multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", beam_finechan_string);
       return -1;
     }  
+
+    ctx->beams[beam_index].ntimesteps = (long)ctx->bandwidth_hz / ctx->beams[beam_index].time_integration / ctx->beams[beam_index].nchan;        
 
     ctx->expected_transfer_size = ctx->expected_transfer_size + 
                                   (ctx->beams[beam_index].ntimesteps * ctx->beams[beam_index].nchan * 
