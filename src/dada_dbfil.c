@@ -545,9 +545,9 @@ int read_dada_header(dada_client_t *client)
     return -1;
   }  
   
-  if (ascii_header_get(client->header, HEADER_METADATA_BEAMS, "%i", &ctx->nbeams) == -1)
+  if (ascii_header_get(client->header, HEADER_NUM_INCOHERENT_BEAMS, "%i", &ctx->nbeams) == -1)
   {
-    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_METADATA_BEAMS);
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_NUM_INCOHERENT_BEAMS);
     return -1;
   }  
 
@@ -660,7 +660,7 @@ int read_dada_header(dada_client_t *client)
     // Now we can calculate ntimesteps for this beam
     // unchannelised samples/sec divided by time_integration
     // e.g. time_integration of 1280 will yield 1280000 / 1280 == 1000 timesteps per sec
-    ctx->beams[beam_index].ntimesteps = (long)1280000 / ctx->beams[beam_index].time_integration;    
+    ctx->beams[beam_index].ntimesteps = (long)ctx->bandwidth_hz / ctx->beams[beam_index].time_integration;    
 
     if (ascii_header_get(client->header, beam_finechan_string, "%ld", &ctx->beams[beam_index].nchan) == -1)
     {
@@ -705,7 +705,7 @@ int read_dada_header(dada_client_t *client)
   multilog(log, LOG_INFO, "Coarse Channel Bandwidth:   %d Hz\n", ctx->bandwidth_hz);   
   multilog(log, LOG_INFO, "Size of subobservation:     %lu bytes\n", ctx->transfer_size); 
   multilog(log, LOG_INFO, "Expected Size of 1s block:  %lu bytes\n", ctx->expected_transfer_size); 
-  multilog(log, LOG_INFO, "Beams:                      %d\n", ctx->nbeams);  
+  multilog(log, LOG_INFO, "Incoheremt Beams:           %d\n", ctx->nbeams);  
   
   for (int beam=0; beam < ctx->nbeams; beam++)
   {

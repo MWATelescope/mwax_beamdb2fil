@@ -74,6 +74,11 @@ int create_fil(dada_client_t *client, int beam_index, cFilFile *out_filfile_ptr,
   filheader.period = 0.253065;                                                  // folding period (s)
   filheader.nbeams = 1;
   filheader.ibeam = 0;
+
+  multilog(log, LOG_INFO, "create_fil(): filheader.tsamp   : %f samples per sec\n", filheader.tsamp);
+  multilog(log, LOG_INFO, "create_fil(): filheader.nsamples: %ld total samples (timesteps per sec %ld * duration %d sec)\n", filheader.nsamples, beam.ntimesteps, ctx->exposure_sec);
+  multilog(log, LOG_INFO, "create_fil(): filheader.fch1    : %f MHz of first channel\n", filheader.fch1);
+  multilog(log, LOG_INFO, "create_fil(): filheader.nchans  : %ld number of channels\n", filheader.nchans);
   
   // Write the header
   CFilFile_WriteHeader(out_filfile_ptr, &filheader);    
