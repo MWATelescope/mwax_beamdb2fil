@@ -9,12 +9,9 @@
 
 #define HAVE_HWLOC      // This is used by the psrdada library to set if we have the hwloc library or not. This lib is used to abstract NUMA / architecture.
 
-//#include <linux/limits.h>
-//#include <pthread.h>
 #include <stdint.h>
 #include <fitsio.h>
 #include "filfile.h"
-//#include "filwriter.h"
 #include "multilog.h"
 
 #define MWAX_COMMAND_LEN        32    // Size of the command in PSRDADA header. E.g. "CAPTURE","QUIT","IDLE"
@@ -22,6 +19,13 @@
 #define HOST_NAME_LEN           64    // Length of hostname
 #define IP_AS_STRING_LEN        15    // xxx.xxx.xxx.xxx   
 
+typedef enum beam_type_enum {
+    unknown = 0,
+    incoherent = 1,
+    coherent = 2
+} beam_type_enum; 
+
+// Structure of a beam
 typedef struct beam_s {
     // FIL info    
     char fil_filename[PATH_MAX];    
@@ -32,6 +36,7 @@ typedef struct beam_s {
     long ntimesteps;                  // how many timesteps per second
     long nchan;                       // number of channels
     double* channels;                 // array of fine channel centres (MHz)
+    beam_type_enum beam_type;                    // incoherent or coherent 
 
     // Beam Statistics
     double* power_freq;               // Stats by freq
@@ -83,7 +88,9 @@ typedef struct dada_db_s {
     int nbit;
     int npol;
     int bandwidth_hz;
-    int nbeams;    
+    int nbeams_incoherent; 
+    int nbeams_coherent;
+    int nbeams_total;
     int exposure_sec;
     uint64_t transfer_size;
     int secs_per_subobs;

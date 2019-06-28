@@ -1,7 +1,7 @@
 /**
  * @file filwriter.c
  * @author Greg Sleap
- * @date 15 May 2018
+ * @date 15 June 2019
  * @brief This is the code that handles writing fil files
  *
  */

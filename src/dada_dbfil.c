@@ -119,7 +119,7 @@ int dada_dbfil_open(dada_client_t* client)
     }      
 
     // Close existing fil files (if we have any)    
-    for (int beam=0; beam < ctx->nbeams; beam++)
+    for (int beam=0; beam < ctx->nbeams_total; beam++)
     {
       if (&(ctx->beams[beam].out_filfile_ptr) != NULL)
       {
@@ -216,7 +216,7 @@ int dada_dbfil_open(dada_client_t* client)
     } */       
 
     /* Create fil files for each beam output                      */
-    for (int beam=0; beam < ctx->nbeams; beam++)
+    for (int beam=0; beam < ctx->nbeams_total; beam++)
     {
       /* Work out the name of the file using the UTC START          */
       /* Convert the UTC_START from the header format: YYYY-MM-DD-hh:mm:ss into YYYYMMDDhhmmss  */        
@@ -276,7 +276,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     // Block 3 == 1st beam timestep 2
     // Block 4 == 2nd beam timestep 2
     // Block 5 == 3rd beam timestep 2
-    int beam = ctx->block_number % ctx->nbeams;
+    int beam = ctx->block_number % ctx->nbeams_total;
 
     multilog(log, LOG_INFO, "dada_dbfil_io(): Writing %d of %d bytes into new fil block for beam %d; Marker = %d.\n", ctx->expected_transfer_size, bytes, beam, ctx->obs_marker_number);     
     
@@ -335,7 +335,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
       written += wrote;
       
       // If this beam is the last beam then increment the marker number
-      if (beam == ctx->nbeams - 1)
+      if (beam == ctx->nbeams_total - 1)
         ctx->obs_marker_number += 1; 
 
       ctx->block_number += 1;    
@@ -454,7 +454,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
     // Observation ends NOW! It got cut short, or we naturally are at the end of the observation 
     // Close existing fits file (if we have one)    
     // Close existing fil files (if we have any)    
-    for (int beam=0; beam < ctx->nbeams; beam++)
+    for (int beam=0; beam < ctx->nbeams_total; beam++)
     {
       if (&(ctx->beams[beam].out_filfile_ptr) != NULL)
       {
@@ -492,7 +492,9 @@ int read_dada_header(dada_client_t *client)
   strncpy(ctx->utc_start, "", UTC_START_LEN);
   ctx->nbit = 0;
   ctx->npol = 0;
-  ctx->nbeams = 0;
+  ctx->nbeams_incoherent = 0;
+  ctx->nbeams_coherent = 0;
+  ctx->nbeams_total = 0;
   ctx->transfer_size = 0;
   ctx->coarse_channel = 0;
     
@@ -544,9 +546,15 @@ int read_dada_header(dada_client_t *client)
     return -1;
   }  
   
-  if (ascii_header_get(client->header, HEADER_NUM_INCOHERENT_BEAMS, "%i", &ctx->nbeams) == -1)
+  if (ascii_header_get(client->header, HEADER_NUM_INCOHERENT_BEAMS, "%i", &ctx->nbeams_incoherent) == -1)
   {
     multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_NUM_INCOHERENT_BEAMS);
+    return -1;
+  }  
+
+  if (ascii_header_get(client->header, HEADER_NUM_COHERENT_BEAMS, "%i", &ctx->nbeams_coherent) == -1)
+  {
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_NUM_COHERENT_BEAMS);
     return -1;
   }  
 
@@ -575,105 +583,85 @@ int read_dada_header(dada_client_t *client)
     return -1;
   }
 
+  /* ensure beams is sane */
+  if (ctx->nbeams_incoherent <= 0 && ctx->nbeams_coherent <= 0)
+  {
+    multilog(log, LOG_ERR, "dada_dbfits_open(): There are no beams in this subobservation.\n");
+    return -1;
+  }
+
+  if (ctx->nbeams_incoherent > INCOHERENT_BEAMS_MAX)
+  {
+    multilog(log, LOG_ERR, "dada_dbfits_open(): %s is not greater than 0 and less than or equal to %d.\n", HEADER_NUM_INCOHERENT_BEAMS, INCOHERENT_BEAMS_MAX);
+    return -1;
+  }
+
+  if (ctx->nbeams_coherent > COHERENT_BEAMS_MAX)
+  {
+    multilog(log, LOG_ERR, "dada_dbfits_open(): %s is not greater than 0 and less than or equal to %d.\n", HEADER_NUM_COHERENT_BEAMS, COHERENT_BEAMS_MAX);
+    return -1;
+  }  
+
   // Process Beams
+  ctx->nbeams_total = ctx->nbeams_incoherent + ctx->nbeams_coherent;
+
+  // Free previous beam structure
   if (ctx->beams != 0)
     free(ctx->beams);
   
   // Allocate beams
-  ctx->beams = malloc(ctx->nbeams * sizeof(beam_s));
+  ctx->beams = malloc(ctx->nbeams_total * sizeof(beam_s));
   
-  int beam_inttime_string_len = strlen(HEADER_INCOHERENT_BEAM_01_TIME_INTEG)+1;
-  char beam_inttime_string[beam_inttime_string_len];  
-
-  int beam_finechan_string_len = strlen(HEADER_INCOHERENT_BEAM_01_CHANNELS)+1;
-  char beam_finechan_string[beam_finechan_string_len];
-
   ctx->expected_transfer_size = 0;
 
-  for (int beam_index = 0; beam_index < ctx->nbeams; beam_index++)
-  {            
-    int beam = beam_index + 1;
-
-    if (beam == 1)
+  for (int beam_index = 0; beam_index < ctx->nbeams_total; beam_index++)
+  {                    
+    if (ascii_header_get(client->header, incoherent_beam_time_integ_string[beam_index], "%ld", &ctx->beams[beam_index].time_integration) == -1)
     {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_01_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_01_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 2)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_02_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_02_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 3)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_03_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_03_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 4)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_04_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_04_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 5)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_05_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_05_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 6)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_06_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_06_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 7)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_07_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_07_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 8)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_08_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_08_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 9)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_09_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_09_CHANNELS, beam_finechan_string_len);
-    }
-    else if (beam == 10)
-    {
-      strncpy(beam_inttime_string, HEADER_INCOHERENT_BEAM_10_TIME_INTEG, beam_inttime_string_len);
-      strncpy(beam_finechan_string, HEADER_INCOHERENT_BEAM_10_CHANNELS, beam_finechan_string_len);
+      multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", incoherent_beam_time_integ_string[beam_index]);
+      return -1;
     }
     else
     {
-      multilog(log, LOG_ERR, "read_dada_header(): %d or more beams are not supported.\n", beam);
+      ctx->beams[beam_index].beam_type = incoherent;
+    }
+          
+    
+    if (ascii_header_get(client->header, incoherent_beam_fine_chan_string[beam_index], "%ld", &ctx->beams[beam_index].nchan) == -1)
+    {
+      multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", incoherent_beam_fine_chan_string[beam_index]);
       return -1;
     }
-        
-    if (ascii_header_get(client->header, beam_inttime_string, "%ld", &ctx->beams[beam_index].time_integration) == -1)
+    else
     {
-      multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", beam_inttime_string);
-      return -1;
-    }      
-    
-    if (ascii_header_get(client->header, beam_finechan_string, "%ld", &ctx->beams[beam_index].nchan) == -1)
-    {
-      multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", beam_finechan_string);
-      return -1;
+      ctx->beams[beam_index].beam_type = incoherent;
     }  
 
-    ctx->beams[beam_index].ntimesteps = (long)ctx->bandwidth_hz / ctx->beams[beam_index].time_integration / ctx->beams[beam_index].nchan;        
+    switch (ctx->beams[beam_index].beam_type)
+    {
+      case incoherent:
+        ctx->beams[beam_index].ntimesteps = (long)ctx->bandwidth_hz / ctx->beams[beam_index].time_integration / ctx->beams[beam_index].nchan;        
+        ctx->expected_transfer_size = ctx->expected_transfer_size + 
+                                      (ctx->beams[beam_index].ntimesteps * ctx->beams[beam_index].nchan * 
+                                      ctx->npol * (ctx->nbit/8));
+        break;
 
-    ctx->expected_transfer_size = ctx->expected_transfer_size + 
-                                  (ctx->beams[beam_index].ntimesteps * ctx->beams[beam_index].nchan * 
-                                   ctx->npol * (ctx->nbit/8));
+      case coherent:
+        multilog(log, LOG_ERR, "read_dada_header(): Coherent beam not supported (beam index %d).\n", beam_index);
+        return -1;
+        //break;
+
+      case unknown:
+        multilog(log, LOG_ERR, "read_dada_header(): Cannot determine beam type for beam index %d.\n", beam_index);
+        return -1;
+    }
   }
 
   // Calculate start freq of each fine channel
   long start_chan_hz = ctx->coarse_channel * ctx->bandwidth_hz;
   
   // allocate space for the fine channel frequencies for each beam
-  for (int beam=0; beam < ctx->nbeams; beam++)
+  for (int beam=0; beam < ctx->nbeams_incoherent; beam++)
   {
     if (ctx->beams[beam].channels != 0)
       free(ctx->beams[beam].channels);
@@ -701,9 +689,26 @@ int read_dada_header(dada_client_t *client)
   multilog(log, LOG_INFO, "Coarse Channel Bandwidth:   %d Hz\n", ctx->bandwidth_hz);   
   multilog(log, LOG_INFO, "Size of subobservation:     %lu bytes\n", ctx->transfer_size); 
   multilog(log, LOG_INFO, "Expected Size of 1s block:  %lu bytes\n", ctx->expected_transfer_size); 
-  multilog(log, LOG_INFO, "Incoheremt Beams:           %d\n", ctx->nbeams);  
   
-  for (int beam=0; beam < ctx->nbeams; beam++)
+  multilog(log, LOG_INFO, "Total Beams:                %d\n", ctx->nbeams_total);  
+  multilog(log, LOG_INFO, "Incoheremt Beams:           %d\n", ctx->nbeams_incoherent);  
+  
+  for (int beam=0; beam < ctx->nbeams_incoherent; beam++)
+  {
+    multilog(log, LOG_INFO, "..Beam %.2d time int (tscrunch): %ld\n", beam+1, ctx->beams[beam].time_integration);
+    multilog(log, LOG_INFO, "..Beam %.2d timesteps/sec:       %ld\n", beam+1, ctx->beams[beam].ntimesteps);    
+    multilog(log, LOG_INFO, "..Beam %.2d channels:            %d\n", beam+1, ctx->beams[beam].nchan);    
+
+    for (int ch=0; ch < ctx->beams[0].nchan; ch++)
+    {
+      // Enable this for debug! If lots of channels it can be big!
+      //multilog(log, LOG_INFO, "..Beam %.2d ch %d %f MHz\n", beam+1, ch, ctx->beams[beam].channels[ch]);
+    }
+  }
+
+  multilog(log, LOG_INFO, "Coheremt Beams:             %d\n", ctx->nbeams_coherent);  
+  
+  for (int beam=0; beam < ctx->nbeams_coherent; beam++)
   {
     multilog(log, LOG_INFO, "..Beam %.2d time int (tscrunch): %ld\n", beam+1, ctx->beams[beam].time_integration);
     multilog(log, LOG_INFO, "..Beam %.2d timesteps/sec:       %ld\n", beam+1, ctx->beams[beam].ntimesteps);    
