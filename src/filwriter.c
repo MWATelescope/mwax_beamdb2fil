@@ -51,33 +51,34 @@ int create_fil(dada_client_t *client, int beam_index, cFilFile *out_filfile_ptr,
   CFilFileHeader_Constructor(&filheader);
 
   // Populate header
-  filheader.telescope_id = 0;                                               // FAKE
-  filheader.machine_id = 0;                                                 // FAKE
-  filheader.data_type = 1;                                                  // 1 - filterbank; 2 - timeseries
+  filheader.telescope_id = 0;                                                     // FAKE
+  filheader.machine_id = 0;                                                       // FAKE
+  filheader.data_type = 1;                                                        // 1 - filterbank; 2 - timeseries
   strncpy(filheader.rawdatafile, beam.fil_filename, 4096);
   strncpy(filheader.source_name, metafits->filename, 4096);  
   filheader.barycentric = 0;
   filheader.pulsarcentric = 0;  
-  filheader.az_start = metafits->azimuth;                                       // Pointing azimuth (degrees)
-  filheader.za_start = 90 - metafits->altitude;                                 // Pointing zenith angle (degrees)
-  filheader.src_raj = metafits->ra;                                             // RA (J2000) of source
-  filheader.src_dej = metafits->dec;                                            // DEC (J2000) of source
-  filheader.tstart = metafits->mjd;                                             // Timestamp MJD of first sample
-  filheader.tsamp = 1.0f / beam.ntimesteps;                                     // time interval between samples (seconds)
-  filheader.nbits = ctx->nbit;                                                  // bits per time sample  
-  filheader.nsamples = beam.ntimesteps * ctx->exposure_sec;                     // number of time samples in the data file (rarely used)
-  filheader.fch1 = beam.channels[0];                                            // Centre freq (MHz) of first channel  
-  filheader.foff = (double)ctx->bandwidth_hz / 1000000.0f / (double)beam.nchan; // filterbank channel bandwidth (MHz)  
+  filheader.az_start = metafits->azimuth;                                         // Pointing azimuth (degrees)
+  filheader.za_start = 90 - metafits->altitude;                                   // Pointing zenith angle (degrees)
+  filheader.src_raj = metafits->ra;                                               // RA (J2000) of source
+  filheader.src_dej = metafits->dec;                                              // DEC (J2000) of source
+  filheader.tstart = metafits->mjd;                                               // Timestamp MJD of first sample
+  filheader.tsamp = 1.0f / beam.ntimesteps;                                       // time interval between samples (seconds)
+  filheader.nbits = ctx->nbit;                                                    // bits per time sample  
+  filheader.nsamples = beam.ntimesteps * ctx->exposure_sec;                       // number of time samples in the data file (rarely used)
+  filheader.fch1 = beam.channels[beam.nchan - 1];                                 // Centre freq (MHz) of last channel  
+  filheader.foff = -(double)ctx->bandwidth_hz / 1000000.0f / (double)beam.nchan;  // fine channel bandwidth (MHz) - negative since we provide higest freq in fch1
   filheader.nchans = beam.nchan;  
-  filheader.nifs = ctx->npol;                                                   // Number of IF channels(polarisations I think)
-  filheader.refdm = 0;                                                          // reference dispersion measure (cm^−3 pc)
-  filheader.period = 0.253065;                                                  // folding period (s)
+  filheader.nifs = ctx->npol;                                                     // Number of IF channels(polarisations I think)
+  filheader.refdm = 0;                                                            // reference dispersion measure (cm^−3 pc)
+  filheader.period = 0.253065;                                                    // folding period (s)
   filheader.nbeams = 1;
   filheader.ibeam = 0;
 
   multilog(log, LOG_INFO, "create_fil(): filheader.tsamp   : %f sec per sample\n", filheader.tsamp);
   multilog(log, LOG_INFO, "create_fil(): filheader.nsamples: %ld total samples (timesteps per sec %ld * duration %d sec)\n", filheader.nsamples, beam.ntimesteps, ctx->exposure_sec);
-  multilog(log, LOG_INFO, "create_fil(): filheader.fch1    : %f MHz of first channel\n", filheader.fch1);
+  multilog(log, LOG_INFO, "create_fil(): filheader.fch1    : %f MHz (center of last) channel\n", filheader.fch1);
+  multilog(log, LOG_INFO, "create_fil(): filheader.foff    : %f MHz width of fine channel (negative since we start at highest)\n", filheader.foff);
   multilog(log, LOG_INFO, "create_fil(): filheader.nchans  : %ld number of channels\n", filheader.nchans);
   
   // Write the header
