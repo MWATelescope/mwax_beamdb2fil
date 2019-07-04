@@ -61,8 +61,8 @@ int CFilFile_WriteHeader(cFilFile *filfile_ptr, const cFilFileHeader* filHeader 
     CFilFile_WriteKeyword_double(filfile_ptr, "foff" , filHeader->foff );
     CFilFile_WriteKeyword_int(filfile_ptr, "nchans" , filHeader->nchans );
     CFilFile_WriteKeyword_int(filfile_ptr, "nifs" , filHeader->nifs );
-    CFilFile_WriteKeyword_double(filfile_ptr, "refdm" , filHeader->refdm );
-    CFilFile_WriteKeyword_double(filfile_ptr, "period" , filHeader->period );
+    //CFilFile_WriteKeyword_double(filfile_ptr, "refdm" , filHeader->refdm );
+    //CFilFile_WriteKeyword_double(filfile_ptr, "period" , filHeader->period );
     CFilFile_WriteKeyword_int(filfile_ptr, "nbeams" , filHeader->nbeams );
     CFilFile_WriteKeyword_int(filfile_ptr, "ibeam" , filHeader->ibeam );
         

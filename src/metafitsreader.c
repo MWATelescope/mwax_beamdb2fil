@@ -75,6 +75,20 @@ int read_metafits(dada_client_t *client, fitsfile *fptr_metafits, metafits_s *mp
   }
   mptr->obsid = obsid;
 
+  // MJD
+  double mjd = 0;
+  char key_mjd[FLEN_KEYWORD] = "MJD";
+
+  multilog(log, LOG_INFO, "Reading %s from metafits\n", key_mjd);
+  if ( fits_read_key(fptr_metafits, TDOUBLE, key_mjd, &mjd, NULL, &status) )
+  {
+    char error_text[30]="";
+    fits_get_errstatus(status, error_text);
+    multilog(log, LOG_ERR, "Error reading metafits key: %s in file %s. Error: %d -- %s\n", key_mjd, fptr_metafits->Fptr->filename, status, error_text);
+    return EXIT_FAILURE;
+  }
+  mptr->mjd = mjd;
+
   // RA
   double ra = 0;
   char key_ra[FLEN_KEYWORD] = "RA";
