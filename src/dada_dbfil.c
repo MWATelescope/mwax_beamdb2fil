@@ -676,7 +676,7 @@ int read_dada_header(dada_client_t *client)
     
     for (int ch=0; ch < ctx->beams[beam].nchan; ch++)
     {    
-      ctx->beams[beam].channels[ch] = (start_chan_hz + (ch * fine_chan_width_hz)) / 1000000.0;
+      ctx->beams[beam].channels[ch] = (start_chan_hz - (ctx->bandwidth_hz/2) + (ch * fine_chan_width_hz)) / 1000000.0;
     }
   }
 

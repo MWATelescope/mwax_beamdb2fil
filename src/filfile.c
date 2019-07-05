@@ -94,7 +94,7 @@ int CFilFile_WriteKeyword_int(cFilFile *filfile_ptr, const char* keyname, int iV
 {
     int ret = CFilFile_WriteString(filfile_ptr, keyname );
 
-    ret += fwrite( &iValue, 1, sizeof(iValue), filfile_ptr->m_File );
+    ret += fwrite( &iValue, sizeof(iValue), 1, filfile_ptr->m_File );
 
     return ret;
 }
@@ -102,7 +102,7 @@ int CFilFile_WriteKeyword_int(cFilFile *filfile_ptr, const char* keyname, int iV
 int CFilFile_WriteKeyword_double(cFilFile *filfile_ptr, const char* keyname, double dValue)
 {
     int ret = CFilFile_WriteString(filfile_ptr, keyname );
-    ret += fwrite( &dValue, 1, sizeof(dValue), filfile_ptr->m_File );
+    ret += fwrite( &dValue, sizeof(dValue), 1, filfile_ptr->m_File );
 
     return ret;
 }
@@ -110,7 +110,7 @@ int CFilFile_WriteKeyword_double(cFilFile *filfile_ptr, const char* keyname, dou
 int CFilFile_WriteKeyword_longlong(cFilFile *filfile_ptr, const char* keyname, long long llValue)
 {
     int ret = CFilFile_WriteString(filfile_ptr, keyname );
-    ret += fwrite( &llValue, 1, sizeof(llValue), filfile_ptr->m_File );
+    ret += fwrite( &llValue, sizeof(llValue), 1, filfile_ptr->m_File );
 
     return ret;
 }

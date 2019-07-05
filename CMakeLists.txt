@@ -13,7 +13,7 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/include ../mwax-common ../psrdada/src ../cfitsio) # -I flags for compiler
 link_directories(${CMAKE_SOURCE_DIR}/lib /home/mwa/linux_64/lib /usr/local/cuda/lib64)        # -L flags for linker
 
-set(PROGSRC src/main.c src/args.c src/dada_dbfil.c src/filfile.c src/filfiletypes.c src/filwriter.c src/global.c src/health.c src/metafitsreader.c)            # define sources
+set(PROGSRC src/main.c src/args.c src/dada_dbfil.c src/filfile.c src/filfiletypes.c src/filwriter.c src/global.c src/health.c src/metafitsreader.c src/util.c)  # define sources
 
 IF(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS_DEBUG "-g")

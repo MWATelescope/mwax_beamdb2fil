@@ -15,6 +15,7 @@
 #include "filfile.h"
 #include "filwriter.h"
 #include "multilog.h"
+#include "util.h"
 
 /**
  *
@@ -50,36 +51,68 @@ int create_fil(dada_client_t *client, int beam_index, cFilFile *out_filfile_ptr,
   // Init header struct
   CFilFileHeader_Constructor(&filheader);
 
-  // Populate header
+  // Populate header  
+  int d,h,m;
+  double s;
+  
+  // Convert to hms
+  degrees_to_hms(metafits->ra, &h, &m, &s);
+    
+  // Reformat into hhmmss.s
+  double ra = format_angle(h, m, s);
+
+  // Convert to dms
+  degrees_to_dms(metafits->dec, &d, &m, &s);
+    
+  // Reformat into ddmmss.s
+  double dec = format_angle(d, m, s);  
+
+  // Other fields
   filheader.telescope_id = 0;                                                     // FAKE
   filheader.machine_id = 0;                                                       // FAKE
   filheader.data_type = 1;                                                        // 1 - filterbank; 2 - timeseries
   strncpy(filheader.rawdatafile, beam.fil_filename, 4096);
   strncpy(filheader.source_name, metafits->filename, 4096);  
-  filheader.barycentric = 1;
+  filheader.barycentric = 0;
   filheader.pulsarcentric = 0;  
   filheader.az_start = metafits->azimuth;                                         // Pointing azimuth (degrees)
   filheader.za_start = 90 - metafits->altitude;                                   // Pointing zenith angle (degrees)
-  filheader.src_raj = metafits->ra;                                               // RA (J2000) of source
-  filheader.src_dej = metafits->dec;                                              // DEC (J2000) of source
+  filheader.src_raj = ra;                                                         // RA (J2000) of source hhmmss.s
+  filheader.src_dej = dec;                                                        // DEC (J2000) of source ddmmss.s
   filheader.tstart = metafits->mjd;                                               // Timestamp MJD of first sample
   filheader.tsamp = 1.0f / beam.ntimesteps;                                       // time interval between samples (seconds)
   filheader.nbits = ctx->nbit;                                                    // bits per time sample  
   filheader.nsamples = beam.ntimesteps * ctx->exposure_sec;                       // number of time samples in the data file (rarely used)  
   filheader.fch1 = beam.channels[beam.nchan - 1];                                 // Centre freq (MHz) of last channel  
-  filheader.foff = -(double)ctx->bandwidth_hz / 1000000.0f / (double)beam.nchan;  // fine channel bandwidth (MHz) - negative since we provide higest freq in fch1
+  filheader.foff = -(double)ctx->bandwidth_hz / (double)1000000.0f / (double)beam.nchan;  // fine channel bandwidth (MHz) - negative since we provide higest freq in fch1
   filheader.nchans = beam.nchan;  
   filheader.nifs = ctx->npol;                                                     // Number of IF channels(polarisations I think)
   filheader.refdm = 0;                                                            // reference dispersion measure (cm^−3 pc)
   filheader.period = 0;                                                           // folding period (s)
-  filheader.nbeams = 1;
-  filheader.ibeam = 0;
+  filheader.nbeams = 1;                                                           // Total beams in file
+  filheader.ibeam = 1;                                                            // Beam number
 
-  multilog(log, LOG_INFO, "create_fil(): filheader.tsamp   : %f sec per sample\n", filheader.tsamp);
-  multilog(log, LOG_INFO, "create_fil(): filheader.nsamples: %ld total samples (timesteps per sec %ld * duration %d sec)\n", filheader.nsamples, beam.ntimesteps, ctx->exposure_sec);
-  multilog(log, LOG_INFO, "create_fil(): filheader.fch1    : %f MHz (center of last) channel\n", filheader.fch1);
-  multilog(log, LOG_INFO, "create_fil(): filheader.foff    : %f MHz width of fine channel (negative since we start at highest)\n", filheader.foff);
-  multilog(log, LOG_INFO, "create_fil(): filheader.nchans  : %ld number of channels\n", filheader.nchans);
+  multilog(log, LOG_INFO, "create_fil(): filheader.telescope_id : %d (0=FAKE)\n", filheader.telescope_id);
+  multilog(log, LOG_INFO, "create_fil(): filheader.machine_id   : %d (0=FAKE)\n", filheader.machine_id);
+  multilog(log, LOG_INFO, "create_fil(): filheader.data_type    : %d (1 - filterbank; 2 - timeseries)\n", filheader.data_type);
+  multilog(log, LOG_INFO, "create_fil(): filheader.rawdatafile  : %s\n", filheader.rawdatafile);
+  multilog(log, LOG_INFO, "create_fil(): filheader.source_name  : %s\n", filheader.source_name);
+  multilog(log, LOG_INFO, "create_fil(): filheader.barycentric  : %d\n", filheader.barycentric);
+  multilog(log, LOG_INFO, "create_fil(): filheader.pulsarcentric: %d\n", filheader.pulsarcentric);
+  multilog(log, LOG_INFO, "create_fil(): filheader.az_start     : %f Pointing azimuth (degrees)\n", filheader.az_start);
+  multilog(log, LOG_INFO, "create_fil(): filheader.za_start     : %f Pointing zenith angle (degrees)\n", filheader.za_start);
+  multilog(log, LOG_INFO, "create_fil(): filheader.src_raj      : %f RA (J2000) of source\n", filheader.src_raj);
+  multilog(log, LOG_INFO, "create_fil(): filheader.src_dej      : %f DEC (J2000) of source\n", filheader.src_dej);
+  multilog(log, LOG_INFO, "create_fil(): filheader.tstart       : %f MJD of start\n", filheader.tstart);
+  multilog(log, LOG_INFO, "create_fil(): filheader.tsamp        : %f sec per sample\n", filheader.tsamp);
+  multilog(log, LOG_INFO, "create_fil(): filheader.nbits        : %d bits per sample\n", filheader.nbits);
+  multilog(log, LOG_INFO, "create_fil(): filheader.nsamples     : %ld total samples (timesteps per sec %ld * duration %d sec)\n", filheader.nsamples, beam.ntimesteps, ctx->exposure_sec);
+  multilog(log, LOG_INFO, "create_fil(): filheader.fch1         : %f MHz (center of last) channel\n", filheader.fch1);
+  multilog(log, LOG_INFO, "create_fil(): filheader.foff         : %f MHz width of fine channel (negative since we start at highest)\n", filheader.foff);
+  multilog(log, LOG_INFO, "create_fil(): filheader.nchans       : %ld number of channels\n", filheader.nchans);
+  multilog(log, LOG_INFO, "create_fil(): filheader.nifs         : %d Number of pols?\n", filheader.nifs);
+  multilog(log, LOG_INFO, "create_fil(): filheader.nbeams       : %d Number of beams\n", filheader.nbeams);
+  multilog(log, LOG_INFO, "create_fil(): filheader.ibeam        : %d Beam number in this file\n", filheader.ibeam);
   
   // Write the header
   CFilFile_WriteHeader(out_filfile_ptr, &filheader);    
