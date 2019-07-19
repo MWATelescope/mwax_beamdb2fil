@@ -107,28 +107,25 @@ int dada_dbfil_open(dada_client_t* client)
 
   // Check this obs_id against our 'in progress' obsid  
   if (ctx->obs_id != this_obs_id)
-  {
-    // We need a new fil file
-    if (&(ctx->beams) != NULL)
-    {
-      multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Closing %lu, Starting %lu...\n", HEADER_OBS_ID, ctx->obs_id, this_obs_id);
-    }
-    else
-    {
-      multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Starting %lu...\n", HEADER_OBS_ID, this_obs_id);
-    }      
-
+  {    
+    multilog(log, LOG_INFO, "dada_dbfil_open(): New %s detected. Starting %lu...\n", HEADER_OBS_ID, this_obs_id);
+    
     // Close existing fil files (if we have any)    
-    for (int beam=0; beam < ctx->nbeams_total; beam++)
+    if (ctx->obs_id != 0)
     {
-      if (&(ctx->beams[beam].out_filfile_ptr) != NULL)
-      {
-        multilog(log, LOG_INFO, "dada_dbfil_open(): Closing %s...\n", ctx->beams[beam].fil_filename);
+      multilog(log, LOG_INFO, "dada_dbfil_open(): Closing %lu...\n", HEADER_OBS_ID, ctx->obs_id);
 
-        if (close_fil(client, &(ctx->beams[beam].out_filfile_ptr))) 
+      for (int beam=0; beam < ctx->nbeams_total; beam++)
+      {
+        if (&(ctx->beams[beam].out_filfile_ptr) != NULL)
         {
-          multilog(log, LOG_ERR,"dada_dbfil_open(): Error closing fils file.\n");
-          return -1;
+          multilog(log, LOG_INFO, "dada_dbfil_open(): Closing %s...\n", ctx->beams[beam].fil_filename);
+
+          if (close_fil(client, &(ctx->beams[beam].out_filfile_ptr))) 
+          {
+            multilog(log, LOG_ERR,"dada_dbfil_open(): Error closing fils file.\n");
+            return -1;
+          }
         }
       }
     }
@@ -435,6 +432,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
     // Did we hit the end of an obs
     if (ctx->exposure_sec == ctx->obs_offset + ctx->secs_per_subobs)
     {            
+      multilog(log, LOG_INFO, "End of observation detected.\n");
       do_close_file = 1;
     }    
     else
@@ -465,8 +463,20 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
           multilog(log, LOG_ERR,"dada_dbfil_close(): Error closing fil file.\n");
           return -1;
         }
+        else
+        {
+          /* File is closed- reset the pointer to null */
+          ctx->beams[beam].out_filfile_ptr.m_File = NULL;
+        }
+        
       }
     }
+
+    // Now reset the obs_id/sub_obs_id variables
+    multilog (log, LOG_INFO, "dada_dbfil_close(): resetting global obs_id to 0.\n");
+    ctx->obs_id = 0;
+    ctx->subobs_id = 0;
+    ctx->obs_marker_number = 0;    
   }     
 
   multilog (log, LOG_INFO, "dada_dbfil_close(): completed\n");
@@ -566,13 +576,13 @@ int read_dada_header(dada_client_t *client)
 
   if (ascii_header_get(client->header, HEADER_MC_IP, "%s", &ctx->multicast_ip) == -1)
   {
-    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_BANDWIDTH_HZ);
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_MC_IP);
     return -1;
   }  
 
   if (ascii_header_get(client->header, HEADER_MC_PORT, "%i", &ctx->multicast_port) == -1)
   {
-    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_BANDWIDTH_HZ);
+    multilog(log, LOG_ERR, "read_dada_header(): %s not found in header.\n", HEADER_MC_PORT);
     return -1;
   }    
 

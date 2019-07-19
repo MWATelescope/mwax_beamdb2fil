@@ -144,11 +144,7 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
       char error_text[30]="";      
       multilog(log, LOG_ERR, "close_fil(): Error closing fil file. Error: %s\n", error_text);
       return EXIT_FAILURE;
-    }
-    else
-    {
-      out_filfile_ptr = NULL;
-    }
+    }    
   }
   else
   {

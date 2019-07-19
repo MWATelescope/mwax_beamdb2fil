@@ -77,17 +77,17 @@ int CFilFile_WriteString(cFilFile *filfile_ptr, const char* keyname )
 
     // write length of keyword name 
     int len = strlen( keyname );
-    size_t ret = fwrite( &len, 1, sizeof(len), filfile_ptr->m_File );
+    size_t ret1 = fwrite( &len, sizeof(int), 1, filfile_ptr->m_File );
 
-    ret += fwrite( keyname, 1, len, filfile_ptr->m_File );
+    size_t ret2 = fwrite( keyname, 1, len, filfile_ptr->m_File );
 
-    if( ret != (strlen(keyname)+sizeof(int)) ){
-        printf("ERROR : error in code did not write keyword name %s correctly (written %lu bytes, expected %lu bytes)\n",
-               keyname, ret, strlen(keyname)+sizeof(int));
+    if( ret1 + ret2 != (size_t)(len+1) ) {
+        printf("ERROR : error in code did not write keyword name %s correctly (written %lu + %lu bytes, expected %d bytes)\n",
+               keyname, ret1, ret2, len + 1);
         exit(-1);
     }
 
-    return ret;
+    return ret1 + ret2;
 }
 
 int CFilFile_WriteKeyword_int(cFilFile *filfile_ptr, const char* keyname, int iValue)
