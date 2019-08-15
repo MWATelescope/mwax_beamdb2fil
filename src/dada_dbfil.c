@@ -671,8 +671,9 @@ int read_dada_header(dada_client_t *client)
 
   //
   // MWA Coarse channel * Bandwidth = Center of channel
+  // So we subtract half of the bandwidth to get the Start frequency of the channel
   //
-  long start_chan_hz = (ctx->coarse_channel * ctx->bandwidth_hz);
+  long start_of_coarse_chan_hz = (ctx->coarse_channel * ctx->bandwidth_hz) - (ctx->bandwidth_hz/2);
   
   // allocate space for the fine channel frequencies for each beam
   for (int beam=0; beam < ctx->nbeams_incoherent; beam++)
@@ -686,7 +687,8 @@ int read_dada_header(dada_client_t *client)
     
     for (int ch=0; ch < ctx->beams[beam].nchan; ch++)
     {    
-      ctx->beams[beam].channels[ch] = (start_chan_hz - (ctx->bandwidth_hz/2) + (ch * fine_chan_width_hz)) / 1000000.0;
+      // Each element represents the START frequency of each "fine" channel
+      ctx->beams[beam].channels[ch] = (start_of_coarse_chan_hz + (ch * fine_chan_width_hz)) / 1000000.0;
     }
   }
 

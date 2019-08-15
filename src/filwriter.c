@@ -83,8 +83,8 @@ int create_fil(dada_client_t *client, int beam_index, cFilFile *out_filfile_ptr,
   filheader.tsamp = 1.0f / beam.ntimesteps;                                       // time interval between samples (seconds)
   filheader.nbits = ctx->nbit;                                                    // bits per time sample  
   filheader.nsamples = beam.ntimesteps * ctx->exposure_sec;                       // number of time samples in the data file (rarely used)  
-  filheader.fch1 = beam.channels[beam.nchan - 1];                                 // Centre freq (MHz) of last channel  
-  filheader.foff = -(double)ctx->bandwidth_hz / (double)1000000.0f / (double)beam.nchan;  // fine channel bandwidth (MHz) - negative since we provide higest freq in fch1
+  filheader.fch1 = beam.channels[0];                                              // Start freq (MHz) of first channel  
+  filheader.foff = (double)ctx->bandwidth_hz / (double)1000000.0f / (double)beam.nchan;  // fine channel bandwidth (MHz) - negative since we provide higest freq in fch1
   filheader.nchans = beam.nchan;  
   filheader.nifs = ctx->npol;                                                     // Number of IF channels(polarisations I think)
   filheader.refdm = 0;                                                            // reference dispersion measure (cm^−3 pc)
@@ -107,8 +107,8 @@ int create_fil(dada_client_t *client, int beam_index, cFilFile *out_filfile_ptr,
   multilog(log, LOG_INFO, "create_fil(): filheader.tsamp        : %f sec per sample\n", filheader.tsamp);
   multilog(log, LOG_INFO, "create_fil(): filheader.nbits        : %d bits per sample\n", filheader.nbits);
   multilog(log, LOG_INFO, "create_fil(): filheader.nsamples     : %ld total samples (timesteps per sec %ld * duration %d sec)\n", filheader.nsamples, beam.ntimesteps, ctx->exposure_sec);
-  multilog(log, LOG_INFO, "create_fil(): filheader.fch1         : %f MHz (center of last) channel\n", filheader.fch1);
-  multilog(log, LOG_INFO, "create_fil(): filheader.foff         : %f MHz width of fine channel (negative since we start at highest)\n", filheader.foff);
+  multilog(log, LOG_INFO, "create_fil(): filheader.fch1         : %f MHz (start of first) channel\n", filheader.fch1);
+  multilog(log, LOG_INFO, "create_fil(): filheader.foff         : %f MHz width of channel\n", filheader.foff);
   multilog(log, LOG_INFO, "create_fil(): filheader.nchans       : %ld number of channels\n", filheader.nchans);
   multilog(log, LOG_INFO, "create_fil(): filheader.nifs         : %d Number of pols?\n", filheader.nifs);
   multilog(log, LOG_INFO, "create_fil(): filheader.nbeams       : %d Number of beams\n", filheader.nbeams);
