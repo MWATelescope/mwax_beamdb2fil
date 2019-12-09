@@ -10,8 +10,8 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR}/include ../mwax-common ../psrdada/src ../cfitsio) # -I flags for compiler
-link_directories(${CMAKE_SOURCE_DIR}/lib /home/mwa/linux_64/lib /usr/local/cuda/lib64  /home/mwa/cfitsio)        # -L flags for linker
+include_directories(${CMAKE_SOURCE_DIR}/include ../mwax_common /opt/psrdada/src /opt/cfitsio/cfitsio-3.47) # -I flags for compiler
+link_directories(${CMAKE_SOURCE_DIR}/lib /usr/local/cuda/lib64)        # -L flags for linker
 
 set(PROGSRC src/main.c src/args.c src/dada_dbfil.c src/filfile.c src/filfiletypes.c src/filwriter.c src/global.c src/health.c src/metafitsreader.c src/util.c)  # define sources
 
@@ -23,4 +23,4 @@ IF(CMAKE_COMPILER_IS_GNUCXX)
 ENDIF(CMAKE_COMPILER_IS_GNUCXX)
 
 add_executable(mwax_beamdb2fil ${PROGSRC})       # define executable target prog, specify sources
-target_link_libraries(mwax_beamdb2fil pthread cfitsio psrdada m)   # -l flags for linking target
+target_link_libraries(mwax_beamdb2fil pthread cfitsio psrdada cudart m)   # -l flags for linking target

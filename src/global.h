@@ -14,7 +14,7 @@
 #include "filfile.h"
 #include "multilog.h"
 
-#define MWAX_COMMAND_LEN        32    // Size of the command in PSRDADA header. E.g. "CAPTURE","QUIT","IDLE"
+#define MWAX_MODE_LEN           32    // Size of the MODE in PSRDADA header. E.g. "HW_LFILES", "VOLTAGE_START", "QUIT","NO_CAPTURE"
 #define UTC_START_LEN           20    // Size of UTC_START in the PSRDADA header (e.g. 2018-08-08-08:00:00)
 #define HOST_NAME_LEN           64    // Length of hostname
 #define IP_AS_STRING_LEN        15    // xxx.xxx.xxx.xxx   
@@ -81,7 +81,7 @@ typedef struct dada_db_s {
     // Observation info
     long obs_id;
     long subobs_id;
-    char command[MWAX_COMMAND_LEN];
+    char mode[MWAX_MODE_LEN];
     char utc_start[UTC_START_LEN];
     int obs_offset;
     int coarse_channel;

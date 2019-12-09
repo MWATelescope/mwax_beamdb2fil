@@ -41,30 +41,30 @@ int dada_dbfil_open(dada_client_t* client)
   // we do not want to explicitly transfer the DADA header
   client->header_transfer = 0;
 
-  // Read the command first
-  strncpy(ctx->command, "", MWAX_COMMAND_LEN);  
-  if (ascii_header_get(client->header, HEADER_COMMAND, "%s", &ctx->command) == -1)
+  // Read the mode first
+  strncpy(ctx->mode, "", MWAX_MODE_LEN);  
+  if (ascii_header_get(client->header, HEADER_MODE, "%s", &ctx->mode) == -1)
   {
-    multilog(log, LOG_ERR, "dada_dbfil_open(): %s not found in header.\n", HEADER_COMMAND);
+    multilog(log, LOG_ERR, "dada_dbfil_open(): %s not found in header.\n", HEADER_MODE);
     return -1;
   }
 
-  // Verify command is ok
-  if (strlen(ctx->command) > 0)
+  // Verify mode is ok
+  if (strlen(ctx->mode) > 0)
   {
-    multilog(log, LOG_INFO, "dada_dbfil_open(): %s == %s\n", HEADER_COMMAND, ctx->command);
+    multilog(log, LOG_INFO, "dada_dbfil_open(): %s == %s\n", HEADER_MODE, ctx->mode);
 
-    if (strncmp(ctx->command, MWAX_COMMAND_CAPTURE, MWAX_COMMAND_LEN) == 0)
+    if (strncmp(ctx->mode, MWAX_MODE_HW_LFILES, MWAX_MODE_LEN) == 0)
     {
       // Normal operations      
     }  
-    else if (strncmp(ctx->command, MWAX_COMMAND_QUIT, MWAX_COMMAND_LEN) == 0)
+    else if (strncmp(ctx->mode, MWAX_MODE_QUIT, MWAX_MODE_LEN) == 0)
     {
       // We'll flag we want to quit
       set_quit(1);
       return EXIT_SUCCESS;
     }
-    else if(strncmp(ctx->command, MWAX_COMMAND_IDLE, MWAX_COMMAND_LEN) == 0)
+    else if(strncmp(ctx->mode, MWAX_MODE_NO_CAPTURE, MWAX_MODE_LEN) == 0)
     {
       // Idle- don't produce files 
       return EXIT_SUCCESS;
@@ -72,14 +72,14 @@ int dada_dbfil_open(dada_client_t* client)
     else
     {
       // Invalid command
-      multilog(log, LOG_ERR, "dada_dbfil_open(): Error: %s '%s' not recognised.\n", HEADER_COMMAND, ctx->command);
+      multilog(log, LOG_ERR, "dada_dbfil_open(): Error: %s '%s' not recognised.\n", HEADER_MODE, ctx->mode);
       return -1;
     }
   }
   else
   {
     // No command provided at all! 
-    multilog(log, LOG_ERR, "dada_dbfil_open(): Error: an empty %s was provided.\n", HEADER_COMMAND);
+    multilog(log, LOG_ERR, "dada_dbfil_open(): Error: an empty %s was provided.\n", HEADER_MODE);
     return -1;
   }
 
@@ -257,7 +257,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
   assert (client != 0);
   dada_db_s* ctx = (dada_db_s*) client->context;
 
-  if (strcmp(ctx->command, MWAX_COMMAND_CAPTURE) == 0)
+  if (strcmp(ctx->mode, MWAX_MODE_HW_LFILES) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_START) == 0)
   {
     multilog_t * log = (multilog_t *) ctx->log;
     
@@ -396,7 +396,7 @@ int64_t dada_dbfil_io_block(dada_client_t *client, void *buffer, uint64_t bytes,
   assert (client != 0);
   dada_db_s* ctx = (dada_db_s*) client->context;
 
-  if (strcmp(ctx->command, MWAX_COMMAND_CAPTURE) == 0)
+  if (strcmp(ctx->mode, MWAX_MODE_HW_LFILES) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_START) == 0)
   {
     multilog_t * log = (multilog_t *) ctx->log;
 
@@ -426,7 +426,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
   int do_close_file = 0;
 
   // If we're still in CAPTURE mode...
-  if (strcmp(ctx->command, MWAX_COMMAND_CAPTURE) == 0)
+  if (strcmp(ctx->mode, MWAX_MODE_HW_LFILES) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_START) == 0)
   {
     // Some sanity checks:
     // Did we hit the end of an obs
@@ -442,7 +442,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
       exit(-1);
     }
   }
-  else if (strcmp(ctx->command, MWAX_COMMAND_QUIT) == 0 || strcmp(ctx->command, MWAX_COMMAND_IDLE) == 0)
+  else if (strcmp(ctx->mode, MWAX_MODE_NO_CAPTURE) == 0 || strcmp(ctx->mode, MWAX_MODE_QUIT) == 0)
   {
     do_close_file = 1;
   }
@@ -696,7 +696,7 @@ int read_dada_header(dada_client_t *client)
   multilog(log, LOG_INFO, "Obs Id:                     %lu\n", ctx->obs_id);
   multilog(log, LOG_INFO, "Subobs Id:                  %lu\n", ctx->subobs_id);
   multilog(log, LOG_INFO, "Offset:                     %d sec\n", ctx->obs_offset);
-  multilog(log, LOG_INFO, "Command:                    %s\n", ctx->command);  
+  multilog(log, LOG_INFO, "Mode:                       %s\n", ctx->mode);  
   multilog(log, LOG_INFO, "Start time (UTC):           %s\n", ctx->utc_start);  
   multilog(log, LOG_INFO, "Duration (secs):            %d\n", ctx->exposure_sec);    
   multilog(log, LOG_INFO, "Bits per real/imag:         %d\n", ctx->nbit);  
