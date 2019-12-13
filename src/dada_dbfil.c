@@ -54,7 +54,7 @@ int dada_dbfil_open(dada_client_t* client)
   {
     multilog(log, LOG_INFO, "dada_dbfil_open(): %s == %s\n", HEADER_MODE, ctx->mode);
 
-    if (strncmp(ctx->mode, MWAX_MODE_HW_LFILES, MWAX_MODE_LEN) == 0)
+    if (strncmp(ctx->mode, MWAX_MODE_CORRELATOR, MWAX_MODE_LEN) == 0)
     {
       // Normal operations      
     }  
@@ -257,7 +257,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
   assert (client != 0);
   dada_db_s* ctx = (dada_db_s*) client->context;
 
-  if (strcmp(ctx->mode, MWAX_MODE_HW_LFILES) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_START) == 0)
+  if (strcmp(ctx->mode, MWAX_MODE_CORRELATOR) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_CAPTURE) == 0)
   {
     multilog_t * log = (multilog_t *) ctx->log;
     
@@ -396,7 +396,7 @@ int64_t dada_dbfil_io_block(dada_client_t *client, void *buffer, uint64_t bytes,
   assert (client != 0);
   dada_db_s* ctx = (dada_db_s*) client->context;
 
-  if (strcmp(ctx->mode, MWAX_MODE_HW_LFILES) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_START) == 0)
+  if (strcmp(ctx->mode, MWAX_MODE_CORRELATOR) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_CAPTURE) == 0)
   {
     multilog_t * log = (multilog_t *) ctx->log;
 
@@ -426,7 +426,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
   int do_close_file = 0;
 
   // If we're still in CAPTURE mode...
-  if (strcmp(ctx->mode, MWAX_MODE_HW_LFILES) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_START) == 0)
+  if (strcmp(ctx->mode, MWAX_MODE_CORRELATOR) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_CAPTURE) == 0)
   {
     // Some sanity checks:
     // Did we hit the end of an obs
