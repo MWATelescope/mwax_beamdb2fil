@@ -15,7 +15,7 @@
 #include "ascii_header.h"
 #include "filwriter.h"
 #include "metafitsreader.h"
-#include "mwax_global_defs.h" // From mwax-common
+#include "../mwax_common/mwax_global_defs.h" // From mwax-common
 
 /**
  * 
@@ -54,21 +54,16 @@ int dada_dbfil_open(dada_client_t* client)
   {
     multilog(log, LOG_INFO, "dada_dbfil_open(): %s == %s\n", HEADER_MODE, ctx->mode);
 
-    if (strncmp(ctx->mode, MWAX_MODE_CORRELATOR, MWAX_MODE_LEN) == 0)
+    if (is_mwax_mode_correlator(ctx->mode) == 0 || is_mwax_mode_vcs(ctx->mode) == 0)
     {
       // Normal operations      
     }  
-    else if (strncmp(ctx->mode, MWAX_MODE_QUIT, MWAX_MODE_LEN) == 0)
+    else if (is_mwax_mode_quit(ctx->mode) == 0)
     {
       // We'll flag we want to quit
       set_quit(1);
       return EXIT_SUCCESS;
-    }
-    else if(strncmp(ctx->mode, MWAX_MODE_NO_CAPTURE, MWAX_MODE_LEN) == 0)
-    {
-      // Idle- don't produce files 
-      return EXIT_SUCCESS;
-    }
+    }    
     else
     {
       // Invalid command
@@ -257,7 +252,9 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
   assert (client != 0);
   dada_db_s* ctx = (dada_db_s*) client->context;
 
-  if (strcmp(ctx->mode, MWAX_MODE_CORRELATOR) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_CAPTURE) == 0)
+  if (is_mwax_mode_correlator(ctx->mode) == 0 || 
+      is_mwax_mode_vcs(ctx->mode)        == 0 ||
+      is_mwax_mode_no_capture(ctx->mode) == 0)
   {
     multilog_t * log = (multilog_t *) ctx->log;
     
@@ -396,16 +393,11 @@ int64_t dada_dbfil_io_block(dada_client_t *client, void *buffer, uint64_t bytes,
   assert (client != 0);
   dada_db_s* ctx = (dada_db_s*) client->context;
 
-  if (strcmp(ctx->mode, MWAX_MODE_CORRELATOR) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_CAPTURE) == 0)
-  {
-    multilog_t * log = (multilog_t *) ctx->log;
+  multilog_t * log = (multilog_t *) ctx->log;
 
-    multilog(log, LOG_INFO, "dada_dbfil_io_block(): Processing block id %llu\n", block_id);
+  multilog(log, LOG_INFO, "dada_dbfil_io_block(): Processing block id %llu\n", block_id);
 
-    return dada_dbfil_io(client, buffer, bytes);
-  }
-  else    
-    return bytes;
+  return dada_dbfil_io(client, buffer, bytes);  
 }
 
 /**
@@ -426,7 +418,9 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
   int do_close_file = 0;
 
   // If we're still in CAPTURE mode...
-  if (strcmp(ctx->mode, MWAX_MODE_CORRELATOR) == 0 || strcmp(ctx->mode, MWAX_MODE_VOLTAGE_CAPTURE) == 0)
+  if (is_mwax_mode_correlator(ctx->mode) == 0 || 
+      is_mwax_mode_vcs(ctx->mode)        == 0 ||
+      is_mwax_mode_no_capture(ctx->mode) == 0)
   {
     // Some sanity checks:
     // Did we hit the end of an obs
@@ -442,7 +436,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
       exit(-1);
     }
   }
-  else if (strcmp(ctx->mode, MWAX_MODE_NO_CAPTURE) == 0 || strcmp(ctx->mode, MWAX_MODE_QUIT) == 0)
+  else if (is_mwax_mode_no_capture(ctx->mode) == 0 || is_mwax_mode_quit(ctx->mode) == 0)
   {
     do_close_file = 1;
   }
