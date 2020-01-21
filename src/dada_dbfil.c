@@ -54,7 +54,7 @@ int dada_dbfil_open(dada_client_t* client)
   {
     multilog(log, LOG_INFO, "dada_dbfil_open(): %s == %s\n", HEADER_MODE, ctx->mode);
 
-    if (is_mwax_mode_correlator(ctx->mode) == 0 || is_mwax_mode_vcs(ctx->mode) == 0)
+    if (is_mwax_mode_correlator(ctx->mode) == 0 || is_mwax_mode_vcs(ctx->mode) == 0 || is_mwax_mode_no_capture(ctx->mode))
     {
       // Normal operations      
     }  
@@ -428,7 +428,12 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
     {            
       multilog(log, LOG_INFO, "End of observation detected.\n");
       do_close_file = 1;
-    }    
+    }   
+    else if (ctx->obs_offset + ctx->secs_per_subobs < ctx->exposure_sec)
+    {
+      // keep going
+      multilog(log, LOG_INFO, "More of this observation to come. Continuing...\n");
+    }
     else
     {
       // We hit the end of the ring buffer, but we shouldn't have. Put out a warning
@@ -436,7 +441,7 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
       exit(-1);
     }
   }
-  else if (is_mwax_mode_no_capture(ctx->mode) == 0 || is_mwax_mode_quit(ctx->mode) == 0)
+  else if (is_mwax_mode_quit(ctx->mode) == 0)
   {
     do_close_file = 1;
   }
