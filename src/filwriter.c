@@ -135,8 +135,6 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
   assert(ctx->log != 0);
   multilog_t *log = (multilog_t *) ctx->log;
 
-  multilog(log, LOG_DEBUG, "close_fil(): Starting.\n");  
-
   if (out_filfile_ptr != NULL)
   {
     if (CFilFile_Close(out_filfile_ptr) != EXIT_SUCCESS)

@@ -423,21 +423,21 @@ int dada_dbfil_close(dada_client_t* client, uint64_t bytes_written)
       is_mwax_mode_no_capture(ctx->mode) == 0)
   {
     // Some sanity checks:
-    // Did we hit the end of an obs
-    if (ctx->exposure_sec == ctx->obs_marker_number + ctx->secs_per_subobs)
+    // Did we hit the end of an obs?
+    if (ctx->obs_marker_number == ctx->exposure_sec)
     {            
-      multilog(log, LOG_INFO, "End of observation detected.\n");
+      multilog(log, LOG_INFO, "dada_dbfil_close(): End of observation detected (Marker=%d, Duration=%d).\n", ctx->obs_marker_number, ctx->exposure_sec);
       do_close_file = 1;
     }   
-    else if (ctx->obs_marker_number + ctx->secs_per_subobs < ctx->exposure_sec)
+    else if (ctx->obs_marker_number < ctx->exposure_sec)
     {
       // keep going
-      multilog(log, LOG_INFO, "More of this observation to come. (Marker=%d, Duration=%d) Continuing...\n", ctx->obs_marker_number, ctx->exposure_sec);
+      multilog(log, LOG_INFO, "dada_dbfil_close(): Waiting for next ringbuffer block... (Marker=%d, Duration=%d).\n", ctx->obs_marker_number, ctx->exposure_sec);
     }
     else
     {
       // We hit the end of the ring buffer, but we shouldn't have. Put out a warning
-      multilog(log, LOG_ERR, "dada_dbfil_close(): We hit the end of the ring buffer, but we shouldn't have! EXPOSURE_SEC=%d but this block OBS_OFFSET=%d and ends at %d sec.\n", ctx->exposure_sec,ctx->obs_offset, ctx->obs_offset + ctx->secs_per_subobs);
+      multilog(log, LOG_ERR, "dada_dbfil_close(): We hit the end of the ring buffer, but we shouldn't have! EXPOSURE_SEC=%d but this block OBS_OFFSET=%d and ends at %d sec.\n", ctx->exposure_sec,ctx->obs_offset, ctx->obs_marker_number);
       exit(-1);
     }
   }
