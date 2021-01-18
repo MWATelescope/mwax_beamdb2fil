@@ -133,7 +133,7 @@ int dada_dbfil_open(dada_client_t *client)
     // But the this_obs_id != this_subobs_id, then it means we are not at the start of an observation and we should skip it
     if (this_obs_id != this_subobs_id)
     {
-      multilog(log, LOG_WARNING, "dada_dbfil_open(): Detected an in progress observation (obs_id: %lu / sub_obs_id: %lu. Skipping this observation.\n", this_obs_id, this_subobs_id);
+      multilog(log, LOG_WARNING, "dada_dbfil_open(): Detected an in progress observation (obs_id: %lu / sub_obs_id: %lu). Skipping this observation.\n", this_obs_id, this_subobs_id);
       // Set obs and subobs to 0 so the io and close methods know we have nothing to do
       ctx->obs_id = 0;
       ctx->subobs_id = 0;
@@ -378,7 +378,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     return bytes;
   }
   else
-    return 0;
+    return bytes;
 }
 
 /**
