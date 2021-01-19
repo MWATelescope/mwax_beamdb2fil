@@ -54,15 +54,15 @@ int dada_dbfil_open(dada_client_t *client)
   {
     multilog(log, LOG_INFO, "dada_dbfil_open(): %s == %s\n", HEADER_MODE, ctx->mode);
 
-    if (is_mwax_mode_correlator(ctx->mode) == 1 || is_mwax_mode_vcs(ctx->mode) == 1 || is_mwax_mode_no_capture(ctx->mode) == 1)
-    {
-      // Normal operations
-    }
-    else if (is_mwax_mode_quit(ctx->mode) == 1)
+    if (is_mwax_mode_quit(ctx->mode) == 1) 
     {
       // We'll flag we want to quit
       set_quit(1);
       return EXIT_SUCCESS;
+    }
+    else if (is_mwax_mode_valid(ctx->mode) == 1)
+    {
+      // Normal operations
     }
     else
     {
@@ -133,7 +133,7 @@ int dada_dbfil_open(dada_client_t *client)
     // But the this_obs_id != this_subobs_id, then it means we are not at the start of an observation and we should skip it
     if (this_obs_id != this_subobs_id)
     {
-      multilog(log, LOG_WARNING, "dada_dbfil_open(): Detected an in progress observation (obs_id: %lu / sub_obs_id: %lu. Skipping this observation.\n", this_obs_id, this_subobs_id);
+      multilog(log, LOG_WARNING, "dada_dbfil_open(): Detected an in progress observation (obs_id: %lu / sub_obs_id: %lu). Skipping this observation.\n", this_obs_id, this_subobs_id);
       // Set obs and subobs to 0 so the io and close methods know we have nothing to do
       ctx->obs_id = 0;
       ctx->subobs_id = 0;
@@ -378,7 +378,7 @@ int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes)
     return bytes;
   }
   else
-    return 0;
+    return bytes;
 }
 
 /**
