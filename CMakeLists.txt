@@ -11,10 +11,10 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/include ../mwax_common /opt/psrdada/src /opt/cfitsio/cfitsio-3.47)         # mwax  -I flags for compiler
-include_directories(${CMAKE_SOURCE_DIR}/include ../mwax_common /opt/psrdada/linux_64/include /opt/cfitsio/include) # blc0 -I flags for compiler
+#include_directories(${CMAKE_SOURCE_DIR}/include ../mwax_common /opt/psrdada/linux_64/include /opt/cfitsio/include) # blc0 -I flags for compiler
 
 link_directories(${CMAKE_SOURCE_DIR}/lib /usr/local/cuda/lib64)                                                                     # mwax  -L flags for linker
-link_directories(${CMAKE_SOURCE_DIR}/lib /home/mwa/linux_64/lib /usr/local/cuda/lib64 /home/mwa/cfitsio /opt/psrdada/linux_64/lib/) # blc0 -L flags for linker
+#link_directories(${CMAKE_SOURCE_DIR}/lib /home/mwa/linux_64/lib /usr/local/cuda/lib64 /home/mwa/cfitsio /opt/psrdada/linux_64/lib/) # blc0 -L flags for linker
 
 set(PROGSRC src/main.c src/args.c ../mwax_common/mwax_global_defs.c src/dada_dbfil.c src/filfile.c src/filfiletypes.c src/filwriter.c src/global.c src/health.c src/metafitsreader.c src/util.c )  # define sources
 
