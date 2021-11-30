@@ -485,16 +485,10 @@ int dada_dbfil_close(dada_client_t *client, uint64_t bytes_written)
       {
         multilog(log, LOG_INFO, "dada_dbfil_close(): Closing %s...\n", ctx->beams[beam].fil_filename);
 
-        if (close_fil(client, &(ctx->beams[beam].out_filfile_ptr)))
-        {
-          /* File is closed- reset the pointer to null */
-          ctx->beams[beam].out_filfile_ptr.m_File = NULL;
-        }
-        else
-        {
-          multilog(log, LOG_ERR, "dada_dbfil_close(): Error closing fil file.\n");
-          return EXIT_FAILURE;
-        }
+        close_fil(client, &(ctx->beams[beam].out_filfile_ptr));
+
+        /* File is closed- reset the pointer to null */
+        ctx->beams[beam].out_filfile_ptr.m_File = NULL;
       }
     }
 
