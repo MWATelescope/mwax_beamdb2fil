@@ -15,3 +15,4 @@ int dada_dbfil_close(dada_client_t *client, uint64_t bytes_written);
 int64_t dada_dbfil_io(dada_client_t *client, void *buffer, uint64_t bytes);
 int64_t dada_dbfil_io_block(dada_client_t *client, void *buffer, uint64_t bytes, uint64_t block_id);
 int read_dada_header(dada_client_t *client);
+int process_new_observation(dada_client_t *client, long new_obs_id, long new_subobs_id);

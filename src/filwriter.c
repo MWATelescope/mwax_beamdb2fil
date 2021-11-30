@@ -143,13 +143,15 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
       multilog(log, LOG_ERR, "close_fil(): Error closing fil file. Error: %s\n", error_text);
       return EXIT_FAILURE;
     }
+
+    out_filfile_ptr = NULL;
   }
   else
   {
     multilog(log, LOG_WARNING, "close_fil(): fil file is already closed.\n");
   }
 
-  return (EXIT_SUCCESS);
+  return EXIT_SUCCESS;
 }
 
 /**
