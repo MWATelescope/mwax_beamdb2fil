@@ -141,7 +141,7 @@ int update_filfile_int(dada_client_t *client, cFilFile *filfile_ptr, char *keywo
   // 1. Start at top of file
   if (fseek(filfile_ptr->m_File, 0, SEEK_SET) == 0)
   {
-    const int BUFF_SIZE = 4096; // This nsamples keyword should be in the first 4K of the file (the header is small)
+    const size_t BUFF_SIZE = 4096; // This nsamples keyword should be in the first 4K of the file (the header is small)
     char buffer[BUFF_SIZE];
 
     // Read a big chunk of header
