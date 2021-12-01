@@ -160,6 +160,9 @@ int dada_dbfil_open(dada_client_t *client)
     if (new_duration_sec != ctx->exposure_sec)
     {
       multilog(log, LOG_INFO, "dada_dbfits_open(): %s has changed from %d sec to %d sec.\n", HEADER_EXPOSURE_SECS, ctx->exposure_sec, new_duration_sec);
+
+      /* Set flag to update the fil file header () when finished */
+      ctx->duration_changed = 1;
     }
 
     /* Get the offset */
@@ -194,9 +197,6 @@ int dada_dbfil_open(dada_client_t *client)
     /* update new values */
     ctx->exposure_sec = new_duration_sec;
     ctx->obs_offset = new_obs_offset_sec;
-
-    /* Set flag to update the fil file header () when finished */
-    ctx->duration_changed = 1;
   }
 
   multilog(log, LOG_INFO, "dada_dbfil_open(): completed\n");

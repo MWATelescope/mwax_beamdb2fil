@@ -218,6 +218,15 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr, int beam_index)
 
   if (out_filfile_ptr != NULL)
   {
+    // Close the filterbank file and ensure it's written out
+    if (CFilFile_Close(out_filfile_ptr) != EXIT_SUCCESS)
+    {
+      char error_text[30] = "";
+      multilog(log, LOG_ERR, "close_fil(): Error closing fil file. Error: %s\n", error_text);
+      return EXIT_FAILURE;
+    }
+    out_filfile_ptr = NULL;
+
     // Check if the duration changed mid observation
     if (ctx->duration_changed == 1)
     {
@@ -227,17 +236,24 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr, int beam_index)
       multilog(log, LOG_INFO, "close_fil(): Beam: %d- Duration changed mid-observation, updating the header to update nsamples: %ld total samples (timesteps per sec %ld * duration %d sec)\n", nsamples, ctx->beams[beam_index].ntimesteps, ctx->exposure_sec);
 
       // Update the nsamples value
+      // Reopen the filterbank file for rw
+      out_filfile_ptr->m_File = fopen(out_filfile_ptr->m_szFileName, "r+");
+
+      // Verify it is open
+      CFilFile_CheckFile(out_filfile_ptr);
+
       update_filfile_int(client, out_filfile_ptr, "nsamples", nsamples);
-    }
 
-    if (CFilFile_Close(out_filfile_ptr) != EXIT_SUCCESS)
-    {
-      char error_text[30] = "";
-      multilog(log, LOG_ERR, "close_fil(): Error closing fil file. Error: %s\n", error_text);
-      return EXIT_FAILURE;
-    }
+      // Close it again
+      if (CFilFile_Close(out_filfile_ptr) != EXIT_SUCCESS)
+      {
+        char error_text[30] = "";
+        multilog(log, LOG_ERR, "close_fil(): Error closing fil file (after updating the nsamples value). Error: %s\n", error_text);
+        return EXIT_FAILURE;
+      }
 
-    out_filfile_ptr = NULL;
+      out_filfile_ptr = NULL;
+    }
   }
   else
   {
