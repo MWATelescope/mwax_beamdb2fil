@@ -122,12 +122,93 @@ int create_fil(dada_client_t *client, int beam_index, cFilFile *out_filfile_ptr,
 
 /**
  *
+ *  @brief Updates a filterbank file header value for a specific keyword (int only supported right now).
+ *  @param[in] client A pointer to the dada_client_t object.
+ *  @param[in] filfile_ptr pointer to FilFile which we are working on.
+ *  @param[in] keyword string with the keyword to search for.
+ *  @param[in] value new value for this keyword.
+ *  @returns EXIT_SUCCESS always but will log WARNINGS if there are problems.
+ */
+int update_filfile_int(dada_client_t *client, cFilFile *filfile_ptr, char *keyword, int new_value)
+{
+  assert(client != 0);
+  dada_db_s *ctx = (dada_db_s *)client->context;
+
+  assert(ctx->log != 0);
+  multilog_t *log = (multilog_t *)ctx->log;
+
+  // Find the keyword for nsamples
+  // 1. Start at top of file
+  if (fseek(filfile_ptr->m_File, 0, SEEK_SET) == 0)
+  {
+    const int BUFF_SIZE = 4096; // This nsamples keyword should be in the first 4K of the file (the header is small)
+    char buffer[BUFF_SIZE];
+
+    // Read a big chunk of header
+    size_t header_bytes_read = fread(buffer, 1, BUFF_SIZE, filfile_ptr->m_File);
+
+    if (header_bytes_read == BUFF_SIZE)
+    {
+      multilog(log, LOG_DEBUG, "update_filfile_int(): read %ld bytes from header!\n", header_bytes_read);
+      // Find "nsamples". ret will be the pointer to the start of that string
+      int ret = binary_strstr(buffer, BUFF_SIZE, "nsamples", strlen("nsamples"));
+
+      if (ret >= 0)
+      {
+        multilog(log, LOG_DEBUG, "update_filfile_int(): Found keyword nsamples in header!\n");
+
+        // Determine offset in bytes to the first byte after the keyword. This should be the first byte of our signed int (4 bytes)
+        int offset_bytes = ret + strlen(keyword);
+
+        // Get the int value and check it is correct!
+        // first get a copy of those 4 bytes
+        int existing_value;
+        memcpy(&existing_value, &buffer[offset_bytes], sizeof(int));
+        multilog(log, LOG_DEBUG, "update_filfile_int(): existing value for %s in header is %d\n", keyword, existing_value);
+
+        // fseek to the correct location to write the new value
+        if (fseek(filfile_ptr->m_File, offset_bytes, SEEK_SET) == 0)
+        {
+          // Now overwrite the value with the new value. It will return 1 element written if successful - any other number failure
+          size_t nsamples_ints_written = fwrite(&new_value, sizeof(int), 1, filfile_ptr->m_File);
+          if (nsamples_ints_written != 1)
+          {
+            multilog(log, LOG_WARNING, "update_filfile_int(): Error Updating %s- Error writing new nsamples! Expected to write %d int, wrote %ld ints instead\n", keyword, 1, nsamples_ints_written);
+          }
+        }
+        else
+        {
+          multilog(log, LOG_WARNING, "update_filfile_int(): Error Updating %s- could not fseek to the correct place to write new nsamples in header!\n", keyword);
+        }
+      }
+      else
+      {
+        multilog(log, LOG_WARNING, "update_filfile_int(): Error Updating %s- could not find keyword nsamples in header! ret was %d\n", keyword, ret);
+      }
+    }
+    else
+    {
+      multilog(log, LOG_WARNING, "update_filfile_int(): Error Updating %s- fread failed to read correct bytes. Expected %d, was %ld.\n", keyword, BUFF_SIZE, header_bytes_read);
+    }
+  }
+  else
+  {
+    multilog(log, LOG_WARNING, "update_filfile_int(): Error Updating %s - fseek to start of file failed.\n", keyword);
+  }
+
+  // We should always return success for now
+  return EXIT_SUCCESS;
+}
+
+/**
+ *
  *  @brief Closes the fil file.
  *  @param[in] client A pointer to the dada_client_t object.
+ *  @param[in] beam_index The beam index/identifier.
  *  @param[in,out] fptr Pointer to a pointer to the filfile structure.
  *  @returns EXIT_SUCCESS on success, or EXIT_FAILURE if there was an error.
  */
-int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
+int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr, int beam_index)
 {
   assert(client != 0);
   dada_db_s *ctx = (dada_db_s *)client->context;
@@ -137,6 +218,18 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr)
 
   if (out_filfile_ptr != NULL)
   {
+    // Check if the duration changed mid observation
+    if (ctx->duration_changed == 1)
+    {
+      // Update the header (nsamples)
+      int nsamples = ctx->beams[beam_index].ntimesteps * ctx->exposure_sec; // number of time samples in the data file (rarely used)
+
+      multilog(log, LOG_INFO, "close_fil(): Beam: %d- Duration changed mid-observation, updating the header to update nsamples: %ld total samples (timesteps per sec %ld * duration %d sec)\n", nsamples, ctx->beams[beam_index].ntimesteps, ctx->exposure_sec);
+
+      // Update the nsamples value
+      update_filfile_int(client, out_filfile_ptr, "nsamples", nsamples);
+    }
+
     if (CFilFile_Close(out_filfile_ptr) != EXIT_SUCCESS)
     {
       char error_text[30] = "";

@@ -121,7 +121,7 @@ int dada_dbfil_open(dada_client_t *client)
         {
           multilog(log, LOG_INFO, "dada_dbfil_open(): Closing %s...\n", ctx->beams[beam].fil_filename);
 
-          if (close_fil(client, &(ctx->beams[beam].out_filfile_ptr)))
+          if (close_fil(client, &(ctx->beams[beam].out_filfile_ptr), beam))
           {
             multilog(log, LOG_ERR, "dada_dbfil_open(): Error closing fils file.\n");
             return -1;
@@ -142,8 +142,61 @@ int dada_dbfil_open(dada_client_t *client)
   }
   else
   {
+    // Update the sub obs id
+    ctx->subobs_id = this_subobs_id;
+
     /* This is a continuation of an existing observation */
     multilog(log, LOG_INFO, "dada_dbfil_open(): continuing %lu (sub observation id: %lu)...\n", ctx->obs_id, ctx->subobs_id);
+
+    /* Get the duration */
+    int new_duration_sec = 0;
+    if (ascii_header_get(client->header, HEADER_EXPOSURE_SECS, "%i", &new_duration_sec) == -1)
+    {
+      multilog(log, LOG_ERR, "dada_dbfits_open(): %s not found in header.\n", HEADER_EXPOSURE_SECS);
+      return -1;
+    }
+
+    /* has the duration changed? */
+    if (new_duration_sec != ctx->exposure_sec)
+    {
+      multilog(log, LOG_INFO, "dada_dbfits_open(): %s has changed from %d sec to %d sec.\n", HEADER_EXPOSURE_SECS, ctx->exposure_sec, new_duration_sec);
+    }
+
+    /* Get the offset */
+    int new_obs_offset_sec = 0;
+    if (ascii_header_get(client->header, HEADER_OBS_OFFSET, "%i", &new_obs_offset_sec) == -1)
+    {
+      multilog(log, LOG_ERR, "dada_dbfits_open(): %s not found in header.\n", HEADER_OBS_OFFSET);
+      return -1;
+    }
+
+    /* has the offset incremented? */
+    if (new_obs_offset_sec == ctx->obs_offset)
+    {
+      multilog(log, LOG_ERR, "dada_dbfits_open(): %s is the same as the previous subobservation (%d == %d).\n", HEADER_OBS_OFFSET, ctx->obs_offset, new_obs_offset_sec);
+      return -1;
+    }
+    else if (new_obs_offset_sec < ctx->obs_offset)
+    {
+      multilog(log, LOG_ERR, "dada_dbfits_open(): %s is less than the previous observation (%d < %d).\n", HEADER_OBS_OFFSET, ctx->obs_offset, new_obs_offset_sec);
+      return -1;
+    }
+    else if (new_obs_offset_sec - ctx->obs_offset != ctx->secs_per_subobs)
+    {
+      multilog(log, LOG_ERR, "dada_dbfits_open(): %s did not increase by %d seconds (it was: %d).\n", HEADER_OBS_OFFSET, ctx->secs_per_subobs, new_obs_offset_sec - ctx->obs_offset);
+      return -1;
+    }
+    else
+    {
+      multilog(log, LOG_INFO, "dada_dbfits_open(): %s incremented from %d sec to %d sec.\n", HEADER_OBS_OFFSET, ctx->obs_offset, new_obs_offset_sec);
+    }
+
+    /* update new values */
+    ctx->exposure_sec = new_duration_sec;
+    ctx->obs_offset = new_obs_offset_sec;
+
+    /* Set flag to update the fil file header () when finished */
+    ctx->duration_changed = 1;
   }
 
   multilog(log, LOG_INFO, "dada_dbfil_open(): completed\n");
@@ -184,6 +237,7 @@ int process_new_observation(dada_client_t *client, long new_obs_id, long new_sub
   ctx->bytes_written = 0;
   ctx->curr_block = 0;
   ctx->block_number = 0;
+  ctx->duration_changed = 0;
 
   // Set the obsid & sub obsid
   ctx->obs_id = new_obs_id;
@@ -485,7 +539,7 @@ int dada_dbfil_close(dada_client_t *client, uint64_t bytes_written)
       {
         multilog(log, LOG_INFO, "dada_dbfil_close(): Closing %s...\n", ctx->beams[beam].fil_filename);
 
-        close_fil(client, &(ctx->beams[beam].out_filfile_ptr));
+        close_fil(client, &(ctx->beams[beam].out_filfile_ptr), beam);
 
         /* File is closed- reset the pointer to null */
         ctx->beams[beam].out_filfile_ptr.m_File = NULL;
