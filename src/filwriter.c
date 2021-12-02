@@ -232,7 +232,7 @@ int close_fil(dada_client_t *client, cFilFile *out_filfile_ptr, int beam_index)
       // Update the header (nsamples)
       int nsamples = ctx->beams[beam_index].ntimesteps * ctx->exposure_sec; // number of time samples in the data file (rarely used)
 
-      multilog(log, LOG_INFO, "close_fil(): Beam: %d- Duration changed mid-observation, updating the header to update nsamples: %ld total samples (timesteps per sec %ld * duration %d sec)\n", nsamples, ctx->beams[beam_index].ntimesteps, ctx->exposure_sec);
+      multilog(log, LOG_INFO, "close_fil(): Beam: %d- Duration changed mid-observation, updating the header to update nsamples: %ld total samples (timesteps per sec %ld * duration %d sec)\n", beam_index, nsamples, ctx->beams[beam_index].ntimesteps, ctx->exposure_sec);
 
       // Update the nsamples value
       // Reopen the filterbank file for rw
