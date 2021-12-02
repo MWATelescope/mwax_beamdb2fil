@@ -155,6 +155,10 @@ int dada_dbfil_open(dada_client_t *client)
       multilog(log, LOG_ERR, "dada_dbfits_open(): %s not found in header.\n", HEADER_EXPOSURE_SECS);
       return -1;
     }
+    else
+    {
+      multilog(log, LOG_DEBUG, "dada_dbfits_open(): %s read in from header (%d).\n", HEADER_EXPOSURE_SECS, new_duration_sec);
+    }
 
     /* has the duration changed? */
     if (new_duration_sec != ctx->exposure_sec)
@@ -162,6 +166,7 @@ int dada_dbfil_open(dada_client_t *client)
       multilog(log, LOG_INFO, "dada_dbfits_open(): %s has changed from %d sec to %d sec.\n", HEADER_EXPOSURE_SECS, ctx->exposure_sec, new_duration_sec);
 
       /* Set flag to update the fil file header () when finished */
+      ctx->exposure_sec = new_duration_sec;
       ctx->duration_changed = 1;
     }
 
@@ -171,6 +176,10 @@ int dada_dbfil_open(dada_client_t *client)
     {
       multilog(log, LOG_ERR, "dada_dbfits_open(): %s not found in header.\n", HEADER_OBS_OFFSET);
       return -1;
+    }
+    else
+    {
+      multilog(log, LOG_DEBUG, "dada_dbfits_open(): %s read in from header (%d).\n", HEADER_OBS_OFFSET, new_obs_offset_sec);
     }
 
     /* has the offset incremented? */
@@ -186,7 +195,7 @@ int dada_dbfil_open(dada_client_t *client)
     }
     else if (new_obs_offset_sec - ctx->obs_offset != ctx->secs_per_subobs)
     {
-      multilog(log, LOG_ERR, "dada_dbfits_open(): %s did not increase by %d seconds (it was: %d).\n", HEADER_OBS_OFFSET, ctx->secs_per_subobs, new_obs_offset_sec - ctx->obs_offset);
+      multilog(log, LOG_ERR, "dada_dbfits_open(): %s did not increase by %d seconds (Old = %d; new = %d; difference = %d).\n", HEADER_OBS_OFFSET, ctx->secs_per_subobs, ctx->obs_offset, new_obs_offset_sec, new_obs_offset_sec - ctx->obs_offset);
       return -1;
     }
     else
@@ -194,8 +203,7 @@ int dada_dbfil_open(dada_client_t *client)
       multilog(log, LOG_INFO, "dada_dbfits_open(): %s incremented from %d sec to %d sec.\n", HEADER_OBS_OFFSET, ctx->obs_offset, new_obs_offset_sec);
     }
 
-    /* update new values */
-    ctx->exposure_sec = new_duration_sec;
+    /* update new offset */
     ctx->obs_offset = new_obs_offset_sec;
   }
 
